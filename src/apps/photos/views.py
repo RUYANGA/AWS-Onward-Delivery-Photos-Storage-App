@@ -23,6 +23,11 @@ NOTICES = {
     "restored": "Photo restored to the gallery.",
     "purged": "Photo deleted permanently, with its files.",
 }
+def delivery_reference_for(photo_id: uuid.UUID, when) -> str:
+    """The app assigns each photo its reference, e.g. ONW-2026-3F9A1C (year + start of the photo id)."""
+    return f"ONW-{when:%Y}-{photo_id.hex[:6].upper()}"
+
+
 MEDIA_KEY_RE = re.compile(r"^(originals|thumbnails)/\d{4}/\d{2}/[0-9a-f\-]{36}\.(jpg|png|webp)$")
 
 
@@ -81,7 +86,7 @@ def upload(request):
         id=photo_id,
         title=details["title"],
         description=details["description"],
-        delivery_reference=details["delivery_reference"],
+        delivery_reference=delivery_reference_for(photo_id, now),
         merchant_name=details["merchant_name"] or None,
         rider_name=details["rider_name"] or None,
         delivery_city=details["delivery_city"] or None,

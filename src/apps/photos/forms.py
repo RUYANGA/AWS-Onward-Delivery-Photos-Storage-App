@@ -1,13 +1,7 @@
 from django import forms
 from django.conf import settings
-from django.core.validators import RegexValidator
 
 from .services.imaging import InvalidImage, process_image
-
-REFERENCE_VALIDATOR = RegexValidator(
-    r"^[A-Za-z0-9][A-Za-z0-9\-_/]{2,63}$",
-    "Enter the delivery reference: 3–64 letters, numbers, -, _ or /.",
-)
 
 
 def _limit(n):
@@ -26,11 +20,6 @@ class PhotoUploadForm(forms.Form):
     title = forms.CharField(
         max_length=120,
         error_messages={"required": "Enter a title, for example “Parcel left with reception”.", **_limit(120)},
-    )
-    delivery_reference = forms.CharField(
-        max_length=64,
-        validators=[REFERENCE_VALIDATOR],
-        error_messages={"required": REFERENCE_VALIDATOR.message, **_limit(64)},
     )
     description = forms.CharField(required=False, max_length=2000, error_messages=_limit(2000))
     merchant_name = forms.CharField(required=False, max_length=120, error_messages=_limit(120))
