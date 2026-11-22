@@ -1,0 +1,38 @@
+# Local development only: PostgreSQL + LocalStack S3. No real AWS credentials are used.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: photos
+      POSTGRES_USER: photos
+      POSTGRES_PASSWORD: photos-local-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U photos -d photos"]
+      interval: 3s
+      retries: 20
+
+  s3:
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: s3
+    volumes:
+      - ./local/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+
+  app:
+    build: .
+    ports: ["${APP_PORT:-8000}:8000"]   # APP_PORT=8010 docker compose up if 8000 is taken
+    depends_on:
+      db: { condition: service_healthy }
+      s3: { condition: service_started }
+    environment:
+      DATABASE_URL: postgres://photos:photos-local-only@db:5432/photos?sslmode=disable
+      PHOTO_BUCKET: onward-local-photos
+      AWS_REGION: eu-west-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      S3_ENDPOINT_URL: http://s3:4566
+      STUDENT_NAME: "Merci RUYANGA"
+      CSRF_COOKIE_SECURE: "false"     # local http://localhost
+      APP_ENV: local
+    read_only: true
+    tmpfs: ["/tmp:mode=0755,uid=0,gid=0"]   # root-owned, as on Fargate
