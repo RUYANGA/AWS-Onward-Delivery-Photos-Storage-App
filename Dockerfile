@@ -25,6 +25,12 @@ COPY src ./src
 # At build time: ECS runs the container with a read-only root filesystem.
 RUN python manage.py collectstatic --noinput --verbosity 0
 
+# The git SHA this image was built from (release.yml passes it); shown on About and /readyz.
+# Declared last so a new version does not invalidate the layers above.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+LABEL org.opencontainers.image.revision=$APP_VERSION
+
 USER 10001:10001
 EXPOSE 8000
 

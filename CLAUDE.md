@@ -52,7 +52,8 @@ commit. Never commit secrets, `.env` (only `.env.example`), `.venv/` or
 - **Migrations** run at container start under an advisory lock (`migrate_safely`). Keep them
   backward compatible: the old version keeps serving during a blue/green release.
 - **CI:** `ci.yml` (lint, Django checks, tests, image smoke test, gitleaks) on every pull request to
-  `main`; `release.yml` only builds, scans and pushes the image on each merge to `main`. Changes
+  `main`; `release.yml` only builds, scans and pushes the image on each merge to `main`;
+  `rollback.yml` (`scripts/rollback.sh`) redeploys one of the last 10 releases by git SHA. Changes
   reach `main` through a pull request, so the checks have run before the release.
 
 ## Before committing

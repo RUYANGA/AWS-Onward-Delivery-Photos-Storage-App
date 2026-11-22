@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.db import connection
 
 log = logging.getLogger(__name__)
@@ -18,5 +19,5 @@ def readiness():
             cursor.execute("SELECT 1")
     except Exception:
         log.exception("readiness check failed")
-        return {"status": "unavailable", "database": "unreachable"}, 503
-    return {"status": "ok", "database": "ok"}, 200
+        return {"status": "unavailable", "database": "unreachable", "version": settings.APP_VERSION}, 503
+    return {"status": "ok", "database": "ok", "version": settings.APP_VERSION}, 200

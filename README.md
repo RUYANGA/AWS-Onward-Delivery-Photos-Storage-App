@@ -81,7 +81,7 @@ Tests use an in-memory SQLite database and a mocked S3 (moto). They cover upload
 
 ## Pipeline
 
-Two GitHub Actions workflows:
+Three GitHub Actions workflows:
 
 - **`ci.yml`** (every pull request to `main`; not repeated on the merge): ruff, the tests, a missing-migrations check, Django's deployment checks, a Docker build with a smoke test that runs the image the way ECS does (read-only filesystem, `/healthz`, `/readyz`, About page, non-root user), and gitleaks. No AWS access.
 - **`release.yml`** (every merge to `main`, or *Run workflow* by hand): builds the image of the merged commit and fails on critical vulnerabilities (Trivy). It then assumes an AWS role through GitHub OIDC (no stored keys) and:
@@ -90,9 +90,26 @@ Two GitHub Actions workflows:
 2. uploads `deploy/deploy-bundle.zip` (`taskdef.json` rendered from the live task definition by `scripts/build-deploy-bundle.sh`, plus `deploy/appspec.yaml`);
 3. moves `latest` to this build. That push starts the CodePipeline `onward-dev-photos-release` (infra repository, `templates/pipeline.yaml`), which runs a CodeDeploy blue/green release with automatic rollback on alarm.
 
+- **`rollback.yml`** (*Run workflow* by hand): lists the releases you can roll back to, or redeploys one of them. See below.
+
 The task definition itself (CPU, memory, roles, secrets) is owned by the infra repository; this repository only swaps the image.
 
-Repository variables: `AWS_REGION` and `AWS_ROLE_ARN` (the infra bootstrap output `AppCiRoleArn`). `ECR_REPOSITORY`, `TASK_FAMILY` and `DEPLOY_BUCKET` default to the names the infra repository creates.
+### Versions and rollback
+
+Every release is the git SHA of the commit merged to `main`. It is the image's tag in ECR, it is baked into the image (`APP_VERSION`), and the running version is shown on the **About** page and in `/readyz` (`"version"`). ECR keeps the **last 10 releases**; older ones are deleted automatically.
+
+Each pipeline run is listed in CodePipeline (*onward-dev-photos-release > Executions*) with the image digest it deployed, and its *Variables* show `Version` and `Reason` (`latest` / `release` for a normal release, the git SHA and your reason for a rollback).
+
+To roll back to a specific version:
+
+1. *Actions > rollback > Run workflow* with **version** empty. The run summary lists the 10 releases, newest first, with the live one marked.
+2. Run it again with the **version** (7 or more characters of the git SHA) and a **reason**.
+
+The pipeline then redeploys that exact image blue/green, with the same alarms and automatic rollback as a release. `latest` is not moved, so the next merge to `main` releases normally; to stay on the old version, revert the bad commit in a pull request. From a terminal with AWS access, `AWS_REGION=eu-west-1 ./scripts/rollback.sh [<version> "<reason>"]` does the same.
+
+During the minutes after a release while the old version is still running, *Stop and roll back* in CodeDeploy is faster: traffic returns to the old tasks at once.
+
+Repository variables: `AWS_REGION` and `AWS_ROLE_ARN` (the infra bootstrap output `AppCiRoleArn`). `ECR_REPOSITORY`, `TASK_FAMILY`, `DEPLOY_BUCKET` and `PIPELINE_NAME` default to the names the infra repository creates.
 
 ## Container
 

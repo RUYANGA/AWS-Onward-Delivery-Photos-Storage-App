@@ -1,0 +1,55 @@
+# Roll back to one of the last 10 releases kept in ECR, through the release pipeline (CodeDeploy
+# blue/green with alarms). Actions > rollback > Run workflow:
+#   - leave "version" empty to list the releases and see which one is live;
+#   - give a git SHA (7+ characters) to redeploy that release.
+# "latest" is not moved, so the next merge to main releases normally.
+name: rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Git SHA of the release to roll back to (empty = list the releases you can roll back to)
+        required: false
+        default: ""
+      reason:
+        description: Why you are rolling back (shown on the pipeline run)
+        required: false
+        default: rollback
+
+concurrency:
+  group: release-main       # never at the same time as a release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'onward-dev/delivery-photos-app' }}
+  PIPELINE_NAME: ${{ vars.PIPELINE_NAME || 'onward-dev-photos-release' }}
+
+jobs:
+  rollback:
+    name: ${{ inputs.version == '' && 'List releases' || 'Roll back' }}
+    if: vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get short-lived AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: gha-rollback-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ${{ inputs.version == '' && 'List the releases kept in ECR' || 'Start the rollback' }}
+        env:
+          VERSION: ${{ inputs.version }}
+          REASON: ${{ inputs.reason }} (by ${{ github.actor }})
+        run: ./scripts/rollback.sh "$VERSION" "$REASON"

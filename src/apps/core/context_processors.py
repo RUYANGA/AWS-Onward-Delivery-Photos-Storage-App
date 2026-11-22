@@ -8,4 +8,6 @@ def lab(request):
         "student_initials": initials,
         "lab_name": settings.LAB_NAME,
         "app_env": settings.APP_ENV,
+        "app_version": settings.APP_VERSION,
+        "app_version_short": settings.APP_VERSION[:7],
     }
