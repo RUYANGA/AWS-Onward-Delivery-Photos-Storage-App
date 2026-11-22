@@ -30,6 +30,8 @@ src/
                              views.py, urls.py, templates/photos/, rebuild_catalogue command, tests/
 requirements/              base.txt, prod.txt (+ gunicorn), dev.txt (+ moto, ruff)
 scripts/build-deploy-bundle.sh   release hand-off to CodeDeploy
+scripts/rollback.sh        list releases and roll back to one
+scripts/db-query.sh        read-only SQL against the private RDS database
 deploy/appspec.yaml        CodeDeploy appspec
 ```
 
@@ -116,6 +118,16 @@ Repository variables: `AWS_REGION` and `AWS_ROLE_ARN` (the infra bootstrap outpu
 Multi-stage `python:3.12-slim` image, runs as UID 10001, no compilers or secrets, served by gunicorn on port 8000. Static files are collected at build time and served by WhiteNoise (CloudFront caches `/static/*`). ECS Fargate runs it with a read-only root filesystem; on Fargate `/tmp` is root-owned, so gunicorn's heartbeat files and any temporary files go to `/dev/shm` (`TMPDIR`).
 
 On start, each task runs `python manage.py migrate_safely`, which applies pending migrations under a PostgreSQL advisory lock, so tasks starting together during a blue/green release or scale-out never race; then gunicorn starts. Keep migrations backward compatible (add columns before using them), because the old version keeps serving until CodeDeploy shifts traffic.
+
+## Query the database
+
+The database is private: only the app tasks can reach it. To look at the data, run a read-only query from a terminal with AWS access:
+
+```bash
+./scripts/db-query.sh "SELECT delivery_reference, title, deleted_at FROM photos ORDER BY created_at DESC"
+```
+
+It starts a one-off copy of the app task (same subnets, security group and Secrets Manager credentials), runs the query in a `READ ONLY` transaction, prints the rows and stops, in about a minute. Writes are refused. Needs the AWS CLI and `jq`; `AWS_REGION` defaults to `eu-west-1`.
 
 ## Disaster recovery
 
