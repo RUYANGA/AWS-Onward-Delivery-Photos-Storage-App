@@ -89,7 +89,7 @@ Three GitHub Actions workflows:
 - **`release.yml`** (every merge to `main`, or *Run workflow* by hand): builds the image of the merged commit and fails on critical vulnerabilities (Trivy). It then assumes an AWS role through GitHub OIDC (no stored keys) and:
 
 1. pushes a tag equal to the commit SHA (re-running a release for the same commit pushes the same image again);
-2. uploads `deploy/deploy-bundle.zip` (`taskdef.json` rendered from the live task definition by `scripts/build-deploy-bundle.sh`, plus `deploy/appspec.yaml`);
+2. uploads `deploy/deploy-bundle.zip` (`taskdef.json` rendered from the live task definition by `scripts/build-deploy-bundle.sh`, which also adds the container health check, plus `deploy/appspec.yaml`);
 3. moves `latest` to this build. That push starts the CodePipeline `onward-dev-photos-release` (infra repository, `templates/pipeline.yaml`), which runs a CodeDeploy blue/green release with automatic rollback on alarm.
 
 - **`rollback.yml`** (*Run workflow* by hand): lists the releases you can roll back to, or redeploys one of them. See below.
@@ -116,6 +116,8 @@ Repository variables: `AWS_REGION` and `AWS_ROLE_ARN` (the infra bootstrap outpu
 ## Container
 
 Multi-stage `python:3.12-slim` image, runs as UID 10001, no compilers or secrets, served by gunicorn on port 8000. Static files are collected at build time and served by WhiteNoise (CloudFront caches `/static/*`). ECS Fargate runs it with a read-only root filesystem; on Fargate `/tmp` is root-owned, so gunicorn's heartbeat files and any temporary files go to `/dev/shm` (`TMPDIR`).
+
+ECS checks each task's health by running `GET /healthz` inside the container every 30 seconds (Python, as the image has no curl), so the console shows **Healthy**; a task that fails 3 checks in a row is replaced. The check is added to the task definition by `scripts/build-deploy-bundle.sh` on every release.
 
 On start, each task runs `python manage.py migrate_safely`, which applies pending migrations under a PostgreSQL advisory lock, so tasks starting together during a blue/green release or scale-out never race; then gunicorn starts. Keep migrations backward compatible (add columns before using them), because the old version keeps serving until CodeDeploy shifts traffic.
 
