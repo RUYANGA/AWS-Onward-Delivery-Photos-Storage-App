@@ -1,0 +1,37 @@
+[project]
+name = "onward-delivery-photos-app"
+version = "2.0.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src"]
+extend-exclude = ["src/apps/*/migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "C4",
+    "UP",
+    "SIM",
+    "S",
+    "DJ",
+    "RUF",
+]
+ignore = [
+    "RUF012", # mutable class attributes are idiomatic in Django
+    "RUF001", # typographic quotes and dashes in user-facing messages are intended
+    "DJ001",  # nullable CharFields mirror the existing photos table (NULL = "not given")
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/config/settings/*.py" = ["F403", "F405"]  # settings modules extend base with star imports
+"**/tests/**" = ["S"]

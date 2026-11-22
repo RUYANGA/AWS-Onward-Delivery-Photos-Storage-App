@@ -1,0 +1,105 @@
+# Onward Logistics: delivery photos application
+
+A single full-stack Python application built with **Django 5.2 (LTS)**. Riders upload a delivery photo with its title, description, delivery reference, merchant, rider, city and time taken; customers and merchants browse the gallery. Infrastructure lives in [AWS-Onward-Delivery-Photos-Storage-Infra](https://github.com/RUYANGA/AWS-Onward-Delivery-Photos-Storage-Infra).
+
+## How it works
+
+- **Upload:** the app checks the file is a real JPEG, PNG or WebP image, stores the **original bytes unchanged** in S3, creates a 480 px WebP thumbnail and writes a JSON sidecar of the details. Keys are random UUIDs and cached as immutable.
+- **Catalogue:** one row per photo in PostgreSQL with the S3 key, version ID and SHA-256 checksum, which link the record to the exact evidence file. No image bytes are stored in the database.
+- **Viewing:** pages come from the app; `/media/*` is served by CloudFront directly from S3. The `/media` route in the app is only a local-development fallback.
+- **Delete and restore:** deleting hides a photo (soft delete). Nothing is removed from S3, and the task role has no delete permission.
+- **Security:** CSRF tokens on every form, a strict Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff`, and uploads larger than `MAX_UPLOAD_MB` refused (413) before the body is read.
+- **Pages:** gallery with search (`/`), upload (`/upload`), photo details (`/photos/<id>`), deleted photos (`/deleted`), about page with student and lab name (`/about`), health checks (`/healthz`, `/readyz`).
+
+## Project layout
+
+```
+manage.py                  Django command line (puts src/ on the path)
+src/
+  config/                  project configuration
+    settings/                base.py (shared), dev.py, prod.py (ECS Fargate), test.py
+    urls.py                  root URLs and error handlers
+    wsgi.py                  entry point: gunicorn config.wsgi:application
+    gunicorn.py              gunicorn settings (workers, timeouts tied to the ALB, /dev/shm)
+  apps/                    one Django app per feature
+    core/                    health checks (/healthz, /readyz), middleware (health, upload limit,
+                             CSP), JSON logging, About and error pages, shared layout and stylesheet,
+                             migrate_safely command, tests/
+    photos/                  models.py (photos table), migrations/, forms.py (upload validation),
+                             services/ (storage.py: S3, imaging.py: validation and thumbnails),
+                             views.py, urls.py, templates/photos/, rebuild_catalogue command, tests/
+requirements/              base.txt, prod.txt (+ gunicorn), dev.txt (+ moto, ruff)
+scripts/build-deploy-bundle.sh   release hand-off to CodeDeploy
+deploy/appspec.yaml        CodeDeploy appspec
+```
+
+## Configuration
+
+All settings come from environment variables. In AWS they are kept in SSM Parameter Store under `/onward/dev/app/` (one parameter per variable, created by the infra repository) and ECS injects them when a task starts; `DB_USERNAME` and `DB_PASSWORD` come from the RDS-managed secret in Secrets Manager. Nothing is configured in the image or in this repository. For local runs without Docker, copy `.env.example` to `.env`; it uses the same variable names.
+
+| Variable | Purpose |
+|---|---|
+| `PHOTO_BUCKET`, `AWS_REGION` | S3 bucket and Region (Parameter Store) |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SSLMODE` | Database location, `sslmode=require` in AWS (Parameter Store) |
+| `DB_USERNAME`, `DB_PASSWORD` | Injected from Secrets Manager |
+| `DATABASE_URL` | Local alternative to the `DB_*` variables, e.g. `postgres://user:pass@host:5432/photos` |
+| `MAX_UPLOAD_MB` | Upload limit, default 15 (Parameter Store) |
+| `STUDENT_NAME`, `LAB_NAME` | About page (Parameter Store) |
+| `APP_ENV` | Environment name (Parameter Store) |
+| `S3_ENDPOINT_URL` | Local S3 emulator only |
+| `DJANGO_SETTINGS_MODULE` | `config.settings.prod` in the image, `config.settings.dev` for `manage.py` |
+| `CSRF_TRUSTED_ORIGINS` | Defaults to `https://*.cloudfront.net` in production (CloudFront sends the ALB's host name) |
+| `SECRET_KEY` | Optional: nothing is signed (no sessions or login), so a per-process key is generated |
+
+## Run locally
+
+```bash
+docker compose up --build
+# open http://localhost:8000
+```
+
+This starts PostgreSQL and LocalStack S3 with a versioned bucket, using local-only dummy values. Without Docker:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements/dev.txt
+python manage.py migrate
+python manage.py runserver      # needs DATABASE_URL, PHOTO_BUCKET (and S3_ENDPOINT_URL for LocalStack)
+```
+
+## Test
+
+```bash
+pip install -r requirements/dev.txt
+ruff check .
+python manage.py makemigrations --check --dry-run --settings=config.settings.test
+python manage.py check --deploy --settings=config.settings.prod
+python manage.py test apps --settings=config.settings.test
+```
+
+Tests use an in-memory SQLite database and a mocked S3 (moto). They cover upload to gallery, bytes in S3 and not in the database, checksum and versioning, sidecars, soft delete and restore, validation, CSRF, upload limits, media key filtering, search, health checks behind the load balancer, security headers, error pages and the catalogue rebuild.
+
+## Pipeline
+
+Two GitHub Actions workflows:
+
+- **`ci.yml`** (every pull request and every push to `main`): ruff, the tests, a missing-migrations check, Django's deployment checks, a Docker build with a smoke test that runs the image the way ECS does (read-only filesystem, `/healthz`, `/readyz`, About page, non-root user), and gitleaks. No AWS access.
+- **`release.yml`** (starts when `ci` succeeds on `main`, or *Run workflow* by hand): checks out the exact commit `ci` tested, builds the image and fails on critical vulnerabilities (Trivy). It then assumes an AWS role through GitHub OIDC (no stored keys) and:
+
+1. pushes a tag equal to the commit SHA (re-running a release for the same commit pushes the same image again);
+2. uploads `deploy/deploy-bundle.zip` (`taskdef.json` rendered from the live task definition by `scripts/build-deploy-bundle.sh`, plus `deploy/appspec.yaml`);
+3. moves `latest` to this build. That push starts the CodePipeline `onward-dev-photos-release` (infra repository, `templates/pipeline.yaml`), which runs a CodeDeploy blue/green release with automatic rollback on alarm.
+
+The task definition itself (CPU, memory, roles, secrets) is owned by the infra repository; this repository only swaps the image.
+
+Repository variables: `AWS_REGION` and `AWS_ROLE_ARN` (the infra bootstrap output `AppCiRoleArn`). `ECR_REPOSITORY`, `TASK_FAMILY` and `DEPLOY_BUCKET` default to the names the infra repository creates.
+
+## Container
+
+Multi-stage `python:3.12-slim` image, runs as UID 10001, no compilers or secrets, served by gunicorn on port 8000. Static files are collected at build time and served by WhiteNoise (CloudFront caches `/static/*`). ECS Fargate runs it with a read-only root filesystem; on Fargate `/tmp` is root-owned, so gunicorn's heartbeat files and any temporary files go to `/dev/shm` (`TMPDIR`).
+
+On start, each task runs `python manage.py migrate_safely`, which applies pending migrations under a PostgreSQL advisory lock, so tasks starting together during a blue/green release or scale-out never race; then gunicorn starts. Keep migrations backward compatible (add columns before using them), because the old version keeps serving until CodeDeploy shifts traffic.
+
+## Disaster recovery
+
+`python manage.py rebuild_catalogue --bucket <bucket>` rebuilds the photo table from the replicated `meta/*.json` sidecars (`--dry-run` to preview, `--report-orphans` to list photos with no catalogue row). See the infra repository's `docs/runbook.md`.
