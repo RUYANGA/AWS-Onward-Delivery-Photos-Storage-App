@@ -62,7 +62,8 @@
     setTimeout(function () { button.disabled = true; }, 0);  // after the browser has captured the form data
   }
 
-  // Confirmation dialog for destructive actions (<dialog> in core/base.html).
+  // Confirmation dialog (<dialog> in core/base.html). data-confirm-tone="restore" gives it the
+  // restore icon and a primary button; the default tone is for destructive actions.
   const dialog = document.getElementById("confirm-dialog");
   let pendingForm = null;
 
@@ -76,7 +77,12 @@
     const subject = dialog.querySelector("[data-confirm-subject]");
     subject.textContent = form.dataset.confirmSubject || "";
     subject.hidden = !form.dataset.confirmSubject;
-    dialog.querySelector("[data-confirm-accept] [data-label]").textContent = form.dataset.confirmAction || "Confirm";
+    const accept = dialog.querySelector("[data-confirm-accept]");
+    accept.querySelector("[data-label]").textContent = form.dataset.confirmAction || "Confirm";
+    const tone = form.dataset.confirmTone === "restore" ? "restore" : "danger";
+    dialog.dataset.tone = tone;
+    accept.classList.toggle("button-danger-solid", tone === "danger");
+    accept.classList.toggle("button-primary", tone === "restore");
     dialog.showModal();
     dialog.querySelector("[data-confirm-cancel]").focus();  // the safe choice has focus
     return false;

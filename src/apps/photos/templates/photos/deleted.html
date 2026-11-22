@@ -24,7 +24,12 @@
         <td class="mono hide-sm">{{ photo.delivery_reference }}</td>
         <td class="hide-sm">{{ photo.deleted_at|date:"d M Y H:i" }}</td>
         <td class="actions">
-          <form method="post" action="{% url 'photos:restore' photo.id %}" data-busy>
+          <form method="post" action="{% url 'photos:restore' photo.id %}"
+            data-confirm-tone="restore"
+            data-confirm-title="Restore this photo?"
+            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
+            data-confirm="It will be visible in the gallery again for customers and merchants. You can delete it again at any time."
+            data-confirm-action="Restore photo" data-busy>
             {% csrf_token %}
             <button class="button button-small" type="submit">{% include "core/_icon.html" with name="restore" size=16 %}<span data-label>Restore photo</span></button>
           </form>

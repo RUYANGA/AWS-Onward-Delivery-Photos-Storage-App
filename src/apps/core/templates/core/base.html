@@ -37,9 +37,9 @@
     </div>
   </footer>
 
-  <dialog class="modal" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+  <dialog class="modal" id="confirm-dialog" data-tone="danger" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="modal-body">
-      <span class="modal-icon">{% include "core/_icon.html" with name="trash" size=22 %}</span>
+      <span class="modal-icon"><span data-tone-icon="danger">{% include "core/_icon.html" with name="trash" size=22 %}</span><span data-tone-icon="restore">{% include "core/_icon.html" with name="restore" size=22 %}</span></span>
       <div class="modal-text">
         <h2 id="confirm-title" data-confirm-title>Are you sure?</h2>
         <p class="modal-subject mono" data-confirm-subject hidden></p>
@@ -48,7 +48,7 @@
     </div>
     <div class="modal-actions">
       <button class="button" type="button" data-confirm-cancel>Cancel</button>
-      <button class="button button-danger-solid" type="button" data-confirm-accept>{% include "core/_icon.html" with name="trash" size=16 %}<span data-label>Confirm</span></button>
+      <button class="button button-danger-solid" type="button" data-confirm-accept><span data-tone-icon="danger">{% include "core/_icon.html" with name="trash" size=16 %}</span><span data-tone-icon="restore">{% include "core/_icon.html" with name="restore" size=16 %}</span><span data-label>Confirm</span></button>
     </div>
   </dialog>
 </body>

@@ -76,6 +76,18 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
         # the S3 object was never touched
         self.assertGreater(self.s3.head_object(Bucket=BUCKET, Key=photo.s3_key)["ContentLength"], 0)
 
+    def test_delete_and_restore_ask_for_confirmation(self):
+        self.upload()
+        photo = self.only_photo()
+        detail = self.client.get(f"/photos/{photo.id}").content.decode()
+        self.assertIn('data-confirm-title="Delete this photo?"', detail)
+
+        self.client.post(f"/photos/{photo.id}/delete")
+        for page in ("/deleted", f"/photos/{photo.id}"):
+            body = self.client.get(page).content.decode()
+            self.assertIn('data-confirm-title="Restore this photo?"', body)
+            self.assertIn('data-confirm-tone="restore"', body)
+
     def test_delete_requires_post(self):
         self.upload()
         self.assertEqual(self.client.get(f"/photos/{self.only_photo().id}/delete").status_code, 405)
