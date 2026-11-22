@@ -1,0 +1,77 @@
+# Lint, Django checks, tests, image smoke test and secret scan. Runs on every pull request and on main;
+# a successful run on main starts release.yml.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # never cancel a run on main
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint and Django checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+      - run: pip install -r requirements/dev.txt
+      - name: Migrations are up to date
+        run: python manage.py makemigrations --check --dry-run --settings=config.settings.test
+      - name: Django deployment checks
+        run: python manage.py check --deploy --settings=config.settings.prod
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+      - run: pip install -r requirements/dev.txt
+      - run: ruff check .
+      - run: python manage.py test apps --settings=config.settings.test
+
+  image:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --pull -t app:candidate .
+      - name: Smoke test the image (read-only filesystem, root-owned /tmp, as on Fargate)
+        run: |
+          docker run -d --name candidate -p 8000:8000 --read-only --tmpfs /tmp:mode=0755,uid=0,gid=0 \
+            -e DATABASE_URL=sqlite:////dev/shm/smoke.sqlite3 -e PHOTO_BUCKET=smoke-test app:candidate
+          for i in $(seq 1 30); do curl -fsS localhost:8000/healthz && break; sleep 1; done
+          curl -fsS localhost:8000/readyz
+          curl -fsS localhost:8000/about | grep -q "Delivery photos"
+          test "$(docker exec candidate id -u)" = "10001"
+          docker rm -f candidate
+
+  secret-scan:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan full history for secrets
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect --source /repo --redact --verbose

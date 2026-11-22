@@ -1,0 +1,98 @@
+# Runs after ci.yml succeeds on main: build -> scan -> push :<git-sha> -> upload
+# the deploy bundle -> push :latest. The :latest push starts the CodePipeline blue/green release
+# (infra repo: templates/pipeline.yaml). AWS access is through GitHub OIDC: no stored keys.
+name: release
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:        # re-run by hand (also uploads the first deploy bundle)
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'onward-dev/delivery-photos-app' }}
+  TASK_FAMILY: ${{ vars.TASK_FAMILY || 'onward-dev-delivery-photos' }}
+  CONTAINER_NAME: app
+  DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}          # empty -> onward-dev-deploy-bundles-<account>-<region>
+  # The commit ci.yml tested (workflow_run), or the current main (manual run).
+  IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  release:
+    name: Build and release
+    # Only after a successful ci run for a push to main (or a manual run), and only once the
+    # infra bootstrap has created the role (AWS_ROLE_ARN = output AppCiRoleArn).
+    if: >-
+      vars.AWS_ROLE_ARN != '' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.IMAGE_TAG }}
+
+      - name: Build image
+        run: docker build --pull -t app:candidate .
+
+      - name: Scan image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: app:candidate
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Get short-lived AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: gha-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push git-SHA tag
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+        run: |
+          docker tag app:candidate "$IMAGE:$IMAGE_TAG"
+          docker push "$IMAGE:$IMAGE_TAG"
+
+      - name: Upload deployment bundle (taskdef + appspec)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          DEPLOY_BUCKET="${DEPLOY_BUCKET:-onward-dev-deploy-bundles-${REGISTRY%%.*}-${AWS_REGION}}"
+          set +e
+          ./scripts/build-deploy-bundle.sh build; rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then
+            aws s3 cp build/deploy-bundle.zip "s3://$DEPLOY_BUCKET/deploy/deploy-bundle.zip"
+          elif [ $rc -ne 3 ]; then
+            exit $rc
+          fi
+
+      - name: Move "latest" to this build (starts the release)
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+        run: |
+          docker tag app:candidate "$IMAGE:latest"
+          docker push "$IMAGE:latest"
+          echo "### Released ${IMAGE_TAG::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "CodePipeline onward-dev-photos-release will now run a blue/green deployment." >> "$GITHUB_STEP_SUMMARY"
