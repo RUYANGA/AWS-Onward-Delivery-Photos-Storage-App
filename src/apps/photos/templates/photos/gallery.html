@@ -1,0 +1,69 @@
+{% extends "core/base.html" %}
+{% block title %}Gallery{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Proof of delivery</p>
+    <h1>Delivery photos</h1>
+    <p class="muted">{{ total }} photo{{ total|pluralize }}{% if query %} matching “{{ query }}”{% else %} kept as delivery evidence{% endif %}</p>
+  </div>
+  <form class="search" method="get" action="{% url 'photos:gallery' %}" role="search">
+    <div class="search-field">
+      {% include "core/_icon.html" with name="search" %}
+      <label for="q" class="visually-hidden">Search by reference, title, city or merchant</label>
+      <input id="q" name="q" type="search" value="{{ query }}" placeholder="Reference, title, city or merchant">
+    </div>
+    <button class="button" type="submit">Search</button>
+  </form>
+</div>
+
+{% include "photos/_notice.html" %}
+
+{% if query %}
+<div class="toolbar">
+  <span class="chip-filter">Results for “{{ query }}” <a href="{% url 'photos:gallery' %}" aria-label="Clear search">{% include "core/_icon.html" with name="x" size=16 %}</a></span>
+</div>
+{% endif %}
+
+{% if photos %}
+<ul class="grid">
+  {% for photo in photos %}
+  <li>
+    <a class="card" href="{% url 'photos:detail' photo.id %}">
+      <span class="thumb">
+        <img src="/{{ photo.thumbnail_key }}" alt="{{ photo.title }}" loading="lazy" width="480" height="360">
+      </span>
+      <span class="card-body">
+        <span class="label-tag">{{ photo.delivery_reference }}</span>
+        <span class="card-title">{{ photo.title }}</span>
+        <span class="meta">
+          <span>{% include "core/_icon.html" with name="pin" size=14 %}{{ photo.delivery_city|default:"City not given" }}</span>
+          <span class="date">{% include "core/_icon.html" with name="clock" size=14 %}{{ photo.created_at|date:"d M Y H:i" }} UTC</span>
+        </span>
+      </span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% if page_obj.has_previous %}<a class="button" href="?page={{ page_obj.previous_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">{% include "core/_icon.html" with name="arrow-left" %}Newer</a>{% endif %}
+  <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="button" href="?page={{ page_obj.next_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">Older{% include "core/_icon.html" with name="arrow-right" %}</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="empty">
+  <div class="empty-icon">{% include "core/_icon.html" with name="image" size=28 %}</div>
+  {% if query %}
+  <h2>No photos match “{{ query }}”</h2>
+  <p>Check the delivery reference, or try a city or merchant name.</p>
+  <a class="button" href="{% url 'photos:gallery' %}">Show all photos</a>
+  {% else %}
+  <h2>No delivery photos yet</h2>
+  <p>Upload the first proof-of-delivery photo to start the gallery. It is stored unchanged and replicated to a second Region.</p>
+  <a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}Upload photo</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

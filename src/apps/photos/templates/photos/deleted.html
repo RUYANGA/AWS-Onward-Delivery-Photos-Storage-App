@@ -1,0 +1,45 @@
+{% extends "core/base.html" %}
+{% block title %}Deleted photos{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Recovery</p>
+    <h1>Deleted photos</h1>
+    <p class="muted">Deleted photos are hidden from the gallery but never destroyed. Restore any of them here.</p>
+  </div>
+</div>
+{% if photos %}
+<div class="panel table-wrap">
+  <table class="table">
+    <thead><tr><th scope="col">Photo</th><th scope="col" class="hide-sm">Reference</th><th scope="col" class="hide-sm">Deleted (UTC)</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+    <tbody>
+    {% for photo in photos %}
+      <tr>
+        <td>
+          <span class="title-cell">
+            <img class="table-thumb" src="/{{ photo.thumbnail_key }}" alt="" width="64" height="48" loading="lazy">
+            <a href="{% url 'photos:detail' photo.id %}">{{ photo.title }}</a>
+          </span>
+        </td>
+        <td class="mono hide-sm">{{ photo.delivery_reference }}</td>
+        <td class="hide-sm">{{ photo.deleted_at|date:"d M Y H:i" }}</td>
+        <td class="actions">
+          <form method="post" action="{% url 'photos:restore' photo.id %}" data-busy>
+            {% csrf_token %}
+            <button class="button button-small" type="submit">{% include "core/_icon.html" with name="restore" size=16 %}<span data-label>Restore photo</span></button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">
+  <div class="empty-icon">{% include "core/_icon.html" with name="inbox" size=28 %}</div>
+  <h2>No deleted photos</h2>
+  <p>Anything you delete from the gallery appears here, and can be restored at any time.</p>
+  <a class="button" href="{% url 'photos:gallery' %}">Go to the gallery</a>
+</div>
+{% endif %}
+{% endblock %}

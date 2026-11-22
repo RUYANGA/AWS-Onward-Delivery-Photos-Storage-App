@@ -1,0 +1,121 @@
+import hashlib
+
+from django.conf import settings
+from django.test import Client, TestCase
+
+from apps.photos.models import Photo
+
+from .helpers import MockedS3Mixin, make_jpeg
+
+BUCKET = settings.PHOTO_BUCKET
+
+
+class UploadAndGalleryTests(MockedS3Mixin, TestCase):
+    def test_upload_appears_in_gallery_with_details(self):
+        response = self.upload()
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response["Location"], "/?notice=uploaded")
+
+        gallery = self.client.get("/").content.decode()
+        self.assertIn("Parcel left with reception", gallery)
+        self.assertIn("ONW-2026-004821", gallery)
+        self.assertIn("Kigali", gallery)
+
+        detail = self.client.get(f"/photos/{self.only_photo().id}").content.decode()
+        self.assertIn("Kivu Crafts", detail)
+        self.assertIn("Signed for by the front desk.", detail)
+        self.assertIn("20 Nov 2026 14:05 UTC", detail)
+
+    def test_photo_bytes_live_in_s3_not_in_database(self):
+        original = make_jpeg()
+        self.upload(photo_bytes=original)
+        photo = self.only_photo()
+
+        stored = self.s3.get_object(Bucket=BUCKET, Key=photo.s3_key)
+        self.assertEqual(stored["Body"].read(), original)
+        self.assertTrue(stored["CacheControl"].endswith("immutable"))
+        self.assertEqual(photo.sha256, hashlib.sha256(original).hexdigest())
+        self.assertTrue(photo.s3_version_id)
+        thumb = self.s3.get_object(Bucket=BUCKET, Key=photo.thumbnail_key)
+        self.assertEqual(thumb["ContentType"], "image/webp")
+
+        # No column can hold file contents.
+        field_types = {f.get_internal_type() for f in Photo._meta.get_fields()}
+        self.assertNotIn("BinaryField", field_types)
+        self.assertNotIn("FileField", field_types)
+        self.assertNotIn("ImageField", field_types)
+
+    def test_sidecar_written_for_disaster_recovery(self):
+        self.upload()
+        photo = self.only_photo()
+        sidecar = self.read_json(photo.metadata_key)
+        self.assertEqual(sidecar["delivery_reference"], "ONW-2026-004821")
+        self.assertEqual(sidecar["s3_key"], photo.s3_key)
+        self.assertIsNone(sidecar["deleted_at"])
+
+    def test_search_filters_by_reference(self):
+        self.upload()
+        self.upload(title="Second drop", delivery_reference="ONW-2026-009999")
+        body = self.client.get("/?q=009999").content.decode()
+        self.assertIn("Second drop", body)
+        self.assertNotIn("Parcel left with reception", body)
+
+
+class SoftDeleteTests(MockedS3Mixin, TestCase):
+    def test_soft_delete_and_restore(self):
+        self.upload()
+        photo = self.only_photo()
+
+        self.assertEqual(self.client.post(f"/photos/{photo.id}/delete").status_code, 303)
+        self.assertNotIn("Parcel left with reception", self.client.get("/").content.decode())
+        self.assertIn("Parcel left with reception", self.client.get("/deleted").content.decode())
+        self.assertIsNotNone(self.read_json(photo.metadata_key)["deleted_at"])
+
+        self.assertEqual(self.client.post(f"/photos/{photo.id}/restore").status_code, 303)
+        self.assertIn("Parcel left with reception", self.client.get("/").content.decode())
+        # the S3 object was never touched
+        self.assertGreater(self.s3.head_object(Bucket=BUCKET, Key=photo.s3_key)["ContentLength"], 0)
+
+    def test_delete_requires_post(self):
+        self.upload()
+        self.assertEqual(self.client.get(f"/photos/{self.only_photo().id}/delete").status_code, 405)
+
+
+class ValidationTests(MockedS3Mixin, TestCase):
+    def test_rejects_non_image(self):
+        response = self.upload(photo_bytes=b"not an image", filename="evil.jpg")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("readable photo", response.content.decode())
+        self.assertEqual(Photo.objects.count(), 0)
+
+    def test_requires_title_and_reference(self):
+        response = self.upload(title="", delivery_reference="!")
+        body = response.content.decode()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Enter a title", body)
+        self.assertIn("delivery reference", body)
+
+    def test_rejects_oversized_upload(self):
+        big = b"\xff\xd8" + b"0" * (6 * 1024 * 1024)
+        response = self.upload(photo_bytes=big, filename="huge.jpg")
+        self.assertEqual(response.status_code, 413)
+        self.assertIn("larger than 5 MB", response.content.decode())
+
+    def test_forms_are_protected_against_csrf(self):
+        client = Client(enforce_csrf_checks=True)
+        response = client.post("/upload", data={"title": "x"})
+        self.assertEqual(response.status_code, 403)
+        page = client.get("/upload").content.decode()
+        self.assertIn("csrfmiddlewaretoken", page)
+
+
+class MediaFallbackTests(MockedS3Mixin, TestCase):
+    def test_media_fallback_only_serves_known_keys(self):
+        self.upload()
+        photo = self.only_photo()
+        ok = self.client.get("/" + photo.thumbnail_key)
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(ok["Cross-Origin-Resource-Policy"], "same-origin")
+        self.assertEqual(b"".join(ok.streaming_content)[:4], b"RIFF")  # WebP
+        self.assertEqual(self.client.get("/media/../meta/secret.json").status_code, 404)
+        self.assertEqual(self.client.get("/media/anything.jpg").status_code, 404)

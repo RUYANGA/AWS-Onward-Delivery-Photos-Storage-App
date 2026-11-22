@@ -1,0 +1,90 @@
+{% extends "core/base.html" %}
+{% block title %}{{ photo.title }}{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="{% if photo.deleted_at %}{% url 'photos:deleted' %}{% else %}{% url 'photos:gallery' %}{% endif %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}{% if photo.deleted_at %}Deleted photos{% else %}Gallery{% endif %}</a>
+  <span aria-hidden="true">/</span>
+  <span class="mono">{{ photo.delivery_reference }}</span>
+</nav>
+
+{% if photo.deleted_at %}
+<div class="notice notice-error" role="status">
+  {% include "core/_icon.html" with name="alert" size=20 %}
+  <p>This photo was deleted on {{ photo.deleted_at|date:"d M Y H:i" }} UTC. It is hidden from the gallery but still kept as evidence.</p>
+</div>
+{% endif %}
+
+<article class="detail">
+  <figure class="photo-frame">
+    <img src="/{{ photo.s3_key }}" alt="{{ photo.title }}" width="{{ photo.width }}" height="{{ photo.height }}">
+    <figcaption>
+      <span>{{ photo.width }} × {{ photo.height }} px · {{ photo.size_mb|floatformat:2 }} MB</span>
+      <a href="/{{ photo.s3_key }}" target="_blank" rel="noopener">Open original {% include "core/_icon.html" with name="external" size=14 %}</a>
+    </figcaption>
+  </figure>
+
+  <div class="detail-side">
+    <div class="detail-title">
+      <div class="tags">
+        <span class="label-tag">{{ photo.delivery_reference }}</span>
+        {% if photo.deleted_at %}<span class="badge badge-danger">Deleted</span>{% else %}<span class="badge">Live</span>{% endif %}
+      </div>
+      <h1>{{ photo.title }}</h1>
+      {% if photo.description %}<p class="description">{{ photo.description }}</p>{% endif %}
+    </div>
+
+    <section class="panel" aria-labelledby="details-heading">
+      <div class="panel-head"><h2 id="details-heading">Delivery details</h2></div>
+      <div class="panel-body">
+        <dl class="facts">
+          <dt>Merchant</dt><dd>{% if photo.merchant_name %}{{ photo.merchant_name }}{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
+          <dt>Rider</dt><dd>{% if photo.rider_name %}{{ photo.rider_name }}{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
+          <dt>City</dt><dd>{% if photo.delivery_city %}{{ photo.delivery_city }}{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
+          <dt>Taken</dt><dd>{% if photo.captured_at %}{{ photo.captured_at|date:"d M Y H:i" }} UTC{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
+          <dt>Uploaded</dt><dd>{{ photo.created_at|date:"d M Y H:i" }} UTC</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="evidence-heading">
+      <div class="panel-head">
+        <h2 id="evidence-heading">Evidence record</h2>
+        {% include "core/_icon.html" with name="shield" %}
+      </div>
+      <div class="panel-body">
+        <dl class="facts">
+          <dt>Object key</dt>
+          <dd class="copy-row"><code>{{ photo.s3_key }}</code><button class="copy-button" type="button" data-copy="{{ photo.s3_key }}" aria-label="Copy object key" hidden>{% include "core/_icon.html" with name="copy" size=14 %}</button></dd>
+          <dt>Version</dt>
+          <dd class="copy-row"><code>{{ photo.s3_version_id|default:"n/a (local)" }}</code>{% if photo.s3_version_id %}<button class="copy-button" type="button" data-copy="{{ photo.s3_version_id }}" aria-label="Copy version ID" hidden>{% include "core/_icon.html" with name="copy" size=14 %}</button>{% endif %}</dd>
+          <dt>SHA-256</dt>
+          <dd class="copy-row"><code>{{ photo.sha256 }}</code><button class="copy-button" type="button" data-copy="{{ photo.sha256 }}" aria-label="Copy SHA-256 checksum" hidden>{% include "core/_icon.html" with name="copy" size=14 %}</button></dd>
+          <dt>Format</dt><dd>{{ photo.content_type }}</dd>
+        </dl>
+      </div>
+    </section>
+
+    {% if photo.deleted_at %}
+    <section class="panel">
+      <form class="panel-body action-row" method="post" action="{% url 'photos:restore' photo.id %}" data-busy>
+        {% csrf_token %}
+        <p class="muted small">Restoring puts the photo back in the gallery.</p>
+        <button class="button button-primary" type="submit">{% include "core/_icon.html" with name="restore" %}<span data-label>Restore photo</span></button>
+      </form>
+    </section>
+    {% else %}
+    <section class="panel danger-zone">
+      <form class="panel-body action-row" method="post" action="{% url 'photos:delete' photo.id %}"
+            data-confirm-title="Delete this photo?"
+            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
+            data-confirm="It will be hidden from the gallery but kept as evidence. You can restore it at any time from Deleted photos."
+            data-confirm-action="Delete photo" data-busy>
+        {% csrf_token %}
+        <p class="muted small">Deleted photos stay recoverable from Deleted photos.</p>
+        <button class="button button-danger" type="submit">{% include "core/_icon.html" with name="trash" %}<span data-label>Delete photo</span></button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</article>
+{% endblock %}
