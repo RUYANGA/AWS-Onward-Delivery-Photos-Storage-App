@@ -7,7 +7,7 @@ A single full-stack Python application built with **Django 5.2 (LTS)**. Riders u
 - **Upload:** the app checks the file is a real JPEG, PNG or WebP image, stores the **original bytes unchanged** in S3, creates a 480 px WebP thumbnail and writes a JSON sidecar of the details. Keys are random UUIDs and cached as immutable.
 - **Catalogue:** one row per photo in PostgreSQL with the S3 key, version ID and SHA-256 checksum, which link the record to the exact evidence file. No image bytes are stored in the database.
 - **Viewing:** pages come from the app; `/media/*` is served by CloudFront directly from S3. The `/media` route in the app is only a local-development fallback.
-- **Delete and restore:** deleting hides a photo (soft delete). Nothing is removed from S3, and the task role has no delete permission.
+- **Delete and restore:** deleting hides a photo (soft delete) and keeps its files, so it can be restored from Deleted photos. **Delete permanently** (only for photos already in Deleted photos) removes the row, and whenever a photo's row is deleted the app also removes its photo, thumbnail and sidecar from S3 (`signals.py`). S3 keeps the old versions until the lifecycle rule expires them (the bucket policy stops anyone erasing them sooner), and the replica in the recovery Region keeps its copy.
 - **Security:** CSRF tokens on every form, a strict Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff`, and uploads larger than `MAX_UPLOAD_MB` refused (413) before the body is read.
 - **Pages:** gallery with search (`/`), upload (`/upload`), photo details (`/photos/<id>`), deleted photos (`/deleted`), about page with student and lab name (`/about`), health checks (`/healthz`, `/readyz`).
 
@@ -79,7 +79,7 @@ python manage.py check --deploy --settings=config.settings.prod
 python manage.py test apps --settings=config.settings.test
 ```
 
-Tests use an in-memory SQLite database and a mocked S3 (moto). They cover upload to gallery, bytes in S3 and not in the database, checksum and versioning, sidecars, soft delete and restore, validation, CSRF, upload limits, media key filtering, search, health checks behind the load balancer, security headers, error pages and the catalogue rebuild.
+Tests use an in-memory SQLite database and a mocked S3 (moto). They cover upload to gallery, bytes in S3 and not in the database, checksum and versioning, sidecars, soft delete and restore, permanent delete removing the S3 files, validation, CSRF, upload limits, media key filtering, search, health checks behind the load balancer, security headers, error pages and the catalogue rebuild.
 
 ## Pipeline
 

@@ -1,5 +1,6 @@
 import hashlib
 
+from botocore.exceptions import ClientError
 from django.conf import settings
 from django.test import Client, TestCase
 
@@ -87,6 +88,56 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
             body = self.client.get(page).content.decode()
             self.assertIn('data-confirm-title="Restore this photo?"', body)
             self.assertIn('data-confirm-tone="restore"', body)
+
+    def test_delete_permanently_removes_row_and_files(self):
+        self.upload()
+        photo = self.only_photo()
+        keys = (photo.s3_key, photo.thumbnail_key, photo.metadata_key)
+        self.client.post(f"/photos/{photo.id}/delete")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(f"/photos/{photo.id}/purge")
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response["Location"], "/deleted?notice=purged")
+        self.assertFalse(Photo.objects.exists())
+        for key in keys:
+            self.assertFalse(self.exists(key), key)
+        self.assertIn("deleted permanently", self.client.get(response["Location"]).content.decode())
+
+    def test_only_deleted_photos_can_be_deleted_permanently(self):
+        self.upload()
+        photo = self.only_photo()
+        self.assertEqual(self.client.post(f"/photos/{photo.id}/purge").status_code, 404)
+        self.assertEqual(self.client.get(f"/photos/{photo.id}/purge").status_code, 405)
+        self.assertTrue(Photo.objects.exists())
+        self.assertTrue(self.exists(photo.s3_key))
+
+    def test_deleting_rows_from_the_database_removes_their_files(self):
+        self.upload()
+        self.upload(title="Second drop", delivery_reference="ONW-2026-009999")
+        keys = [k for p in Photo.objects.all() for k in (p.s3_key, p.thumbnail_key, p.metadata_key)]
+        with self.captureOnCommitCallbacks(execute=True):
+            Photo.objects.all().delete()
+        self.assertEqual(len(keys), 6)
+        for key in keys:
+            self.assertFalse(self.exists(key), key)
+
+    def test_delete_permanently_asks_for_confirmation(self):
+        self.upload()
+        photo = self.only_photo()
+        self.assertNotIn("/purge", self.client.get(f"/photos/{photo.id}").content.decode())
+        self.client.post(f"/photos/{photo.id}/delete")
+        for page in ("/deleted", f"/photos/{photo.id}"):
+            body = self.client.get(page).content.decode()
+            self.assertIn(f'action="/photos/{photo.id}/purge"', body)
+            self.assertIn('data-confirm-title="Delete this photo permanently?"', body)
+
+    def exists(self, key) -> bool:
+        try:
+            self.s3.head_object(Bucket=BUCKET, Key=key)
+            return True
+        except ClientError:
+            return False
 
     def test_delete_requires_post(self):
         self.upload()
