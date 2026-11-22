@@ -66,7 +66,12 @@
 
     {% if photo.deleted_at %}
     <section class="panel">
-      <form class="panel-body action-row" method="post" action="{% url 'photos:restore' photo.id %}" data-busy>
+      <form class="panel-body action-row" method="post" action="{% url 'photos:restore' photo.id %}"
+            data-confirm-tone="restore"
+            data-confirm-title="Restore this photo?"
+            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
+            data-confirm="It will be visible in the gallery again for customers and merchants. You can delete it again at any time."
+            data-confirm-action="Restore photo" data-busy>
         {% csrf_token %}
         <p class="muted small">Restoring puts the photo back in the gallery.</p>
         <button class="button button-primary" type="submit">{% include "core/_icon.html" with name="restore" %}<span data-label>Restore photo</span></button>
