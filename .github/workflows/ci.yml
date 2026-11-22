@@ -1,15 +1,14 @@
-# Lint, Django checks, tests, image smoke test and secret scan. Runs on every pull request and on main;
-# a successful run on main starts release.yml.
+# Lint, Django checks, tests, image smoke test and secret scan on every pull request to main.
+# A merge to main does not re-run these; release.yml builds and pushes the image.
 name: ci
 
 on:
   pull_request:
-  push:
     branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # never cancel a run on main
+  cancel-in-progress: true
 
 permissions:
   contents: read
