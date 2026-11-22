@@ -100,7 +100,9 @@ The task definition itself (CPU, memory, roles, secrets) is owned by the infra r
 
 Every release is the git SHA of the commit merged to `main`. It is the image's tag in ECR, it is baked into the image (`APP_VERSION`), and the running version is shown on the **About** page and in `/readyz` (`"version"`). ECR keeps the **last 10 releases**; older ones are deleted automatically.
 
-Each pipeline run is listed in CodePipeline (*onward-dev-photos-release > Executions*) with the image digest it deployed, and its *Variables* show `Version` and `Reason` (`latest` / `release` for a normal release, the git SHA and your reason for a rollback).
+Each pipeline run is named by its version: the deploy bundle is uploaded with the label `Version <sha>: <pull request title>` (`scripts/release-label.sh`), which CodePipeline shows as the *DeployBundle* source revision in the run history and in the Deploy stage's **Rollback** dialog. A rollback run is labelled `Version <sha>: rollback: <reason>`. The run's *Variables* show `Version` and `Reason` too.
+
+To roll back from the pipeline console, open the Deploy stage's **Rollback**, choose the version by its label and *Start rollback*. The dialog lists successful runs made since the pipeline definition last changed; for any of the 10 releases kept in ECR, use the workflow below.
 
 To roll back to a specific version:
 

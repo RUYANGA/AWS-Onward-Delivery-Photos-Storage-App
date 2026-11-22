@@ -50,8 +50,22 @@ if [[ "$digest" == "$live" ]]; then
 fi
 
 variables="$(jq -cn --arg v "$sha" --arg r "$REASON" '[{name: "Version", value: $v}, {name: "Reason", value: $r}]')"
+
+# A deploy bundle labelled with this version, so the run is named in the pipeline's history and
+# Rollback dialog. The run is pinned to that exact S3 object version.
+account="$(aws sts get-caller-identity --query Account --output text)"
+bucket="${DEPLOY_BUCKET:-onward-dev-deploy-bundles-${account}-${AWS_REGION}}"
+build_dir="$(mktemp -d)"; trap 'rm -rf "$build_dir"' EXIT
+TASK_FAMILY="${TASK_FAMILY:-onward-dev-delivery-photos}" CONTAINER_NAME="${CONTAINER_NAME:-app}" \
+  "$(dirname "$0")/build-deploy-bundle.sh" "$build_dir" >/dev/null
+label="$("$(dirname "$0")/release-label.sh" "$sha" "rollback: $REASON")"
+bundle_version="$(aws s3api put-object --bucket "$bucket" --key deploy/deploy-bundle.zip \
+  --body "$build_dir/deploy-bundle.zip" --metadata "codepipeline-artifact-revision-summary=$label" \
+  --query VersionId --output text)"
+
 execution="$(aws codepipeline start-pipeline-execution --name "$PIPELINE" \
   --source-revisions "actionName=Image,revisionType=IMAGE_DIGEST,revisionValue=$digest" \
+                     "actionName=DeployBundle,revisionType=S3_OBJECT_VERSION_ID,revisionValue=$bundle_version" \
   --variables "$variables" --query pipelineExecutionId --output text)"
 url="https://${AWS_REGION}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${PIPELINE}/executions/${execution}/timeline?region=${AWS_REGION}"
 echo "Rolling back to ${sha:0:7} (${digest:7:12}): $url"
