@@ -1,0 +1,55 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Delivery photos{% endblock %} · Onward Logistics</title>
+  <link rel="stylesheet" href="{% static 'core/styles.css' %}">
+  <script src="{% static 'core/app.js' %}" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="{% url 'photos:gallery' %}">
+        <span class="brand-mark">{% include "core/_icon.html" with name="box" size=18 %}</span>
+        <span class="brand-text"><span>Onward <strong>Delivery photos</strong></span><small>Proof of delivery</small></span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        {% with current=request.resolver_match.view_name %}
+        <a class="nav-link" href="{% url 'photos:gallery' %}" {% if current == 'photos:gallery' or current == 'photos:detail' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="grid" %}<span class="label">Gallery</span></a>
+        <a class="nav-link" href="{% url 'photos:deleted' %}" {% if current == 'photos:deleted' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="trash" %}<span class="label">Deleted photos</span></a>
+        <a class="nav-link" href="{% url 'core:about' %}" {% if current == 'core:about' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="info" %}<span class="label">About</span></a>
+        {% endwith %}
+        <a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}<span class="label">Upload photo</span></a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-row">
+      <span>{% include "core/_icon.html" with name="lock" size=16 %}Photos are visible only through Onward. Each one is kept as delivery evidence.</span>
+      <span>{% include "core/_icon.html" with name="copy-region" size=16 %}Replicated to a second AWS Region</span>
+    </div>
+  </footer>
+
+  <dialog class="modal" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <div class="modal-body">
+      <span class="modal-icon">{% include "core/_icon.html" with name="trash" size=22 %}</span>
+      <div class="modal-text">
+        <h2 id="confirm-title" data-confirm-title>Are you sure?</h2>
+        <p class="modal-subject mono" data-confirm-subject hidden></p>
+        <p id="confirm-message" data-confirm-message></p>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="button" type="button" data-confirm-cancel>Cancel</button>
+      <button class="button button-danger-solid" type="button" data-confirm-accept>{% include "core/_icon.html" with name="trash" size=16 %}<span data-label>Confirm</span></button>
+    </div>
+  </dialog>
+</body>
+</html>
