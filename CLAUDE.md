@@ -51,8 +51,9 @@ commit. Never commit secrets, `.env` (only `.env.example`), `.venv/` or
   external CDNs or fonts; use `src/apps/core/static/core/styles.css` and `app.js`.
 - **Migrations** run at container start under an advisory lock (`migrate_safely`). Keep them
   backward compatible: the old version keeps serving during a blue/green release.
-- **CI:** `ci.yml` (lint, Django checks, tests, image smoke test, gitleaks) on every pull request and
-  push to `main`; `release.yml` builds, scans and releases after `ci` succeeds on `main`.
+- **CI:** `ci.yml` (lint, Django checks, tests, image smoke test, gitleaks) on every pull request to
+  `main`; `release.yml` only builds, scans and pushes the image on each merge to `main`. Changes
+  reach `main` through a pull request, so the checks have run before the release.
 
 ## Before committing
 

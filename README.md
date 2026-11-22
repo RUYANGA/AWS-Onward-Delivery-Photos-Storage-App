@@ -83,8 +83,8 @@ Tests use an in-memory SQLite database and a mocked S3 (moto). They cover upload
 
 Two GitHub Actions workflows:
 
-- **`ci.yml`** (every pull request and every push to `main`): ruff, the tests, a missing-migrations check, Django's deployment checks, a Docker build with a smoke test that runs the image the way ECS does (read-only filesystem, `/healthz`, `/readyz`, About page, non-root user), and gitleaks. No AWS access.
-- **`release.yml`** (starts when `ci` succeeds on `main`, or *Run workflow* by hand): checks out the exact commit `ci` tested, builds the image and fails on critical vulnerabilities (Trivy). It then assumes an AWS role through GitHub OIDC (no stored keys) and:
+- **`ci.yml`** (every pull request to `main`; not repeated on the merge): ruff, the tests, a missing-migrations check, Django's deployment checks, a Docker build with a smoke test that runs the image the way ECS does (read-only filesystem, `/healthz`, `/readyz`, About page, non-root user), and gitleaks. No AWS access.
+- **`release.yml`** (every merge to `main`, or *Run workflow* by hand): builds the image of the merged commit and fails on critical vulnerabilities (Trivy). It then assumes an AWS role through GitHub OIDC (no stored keys) and:
 
 1. pushes a tag equal to the commit SHA (re-running a release for the same commit pushes the same image again);
 2. uploads `deploy/deploy-bundle.zip` (`taskdef.json` rendered from the live task definition by `scripts/build-deploy-bundle.sh`, plus `deploy/appspec.yaml`);
