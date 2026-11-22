@@ -31,6 +31,7 @@ CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 STUDENT_NAME = env("STUDENT_NAME", default="Student name not set")
 LAB_NAME = env("LAB_NAME", default="Storing and Serving Delivery Photos for Onward Logistics")
 APP_ENV = env("APP_ENV", default="local")
+APP_VERSION = env("APP_VERSION", default="dev")  # git SHA, baked into the image at build time
 
 PHOTO_BUCKET = env("PHOTO_BUCKET", default="")
 AWS_REGION = env("AWS_REGION", default=env("AWS_DEFAULT_REGION", default="eu-west-1"))

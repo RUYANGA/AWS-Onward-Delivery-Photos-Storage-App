@@ -1,5 +1,7 @@
 from django.test import TestCase, override_settings
 
+GIT_SHA = "7fd399bfd95c7e971795ad5c28a1dabb0d20fc24"
+
 
 class AboutPageTests(TestCase):
     def test_shows_student_and_lab(self):
@@ -20,6 +22,11 @@ class HealthTests(TestCase):
 
     def test_readiness_checks_database(self):
         self.assertEqual(self.client.get("/readyz").json()["database"], "ok")
+
+    @override_settings(APP_VERSION=GIT_SHA)
+    def test_reports_the_running_version(self):
+        self.assertEqual(self.client.get("/readyz").json()["version"], GIT_SHA)
+        self.assertIn(f'title="{GIT_SHA}">7fd399b<', self.client.get("/about").content.decode())
 
     @override_settings(ALLOWED_HOSTS=["photos.example.com"])
     def test_liveness_answers_load_balancer_on_private_ip(self):
