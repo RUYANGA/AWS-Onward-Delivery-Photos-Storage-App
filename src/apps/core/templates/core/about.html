@@ -1,0 +1,48 @@
+{% extends "core/base.html" %}
+{% block title %}About{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-body about-hero">
+    <div class="avatar" aria-hidden="true">{{ student_initials }}</div>
+    <div>
+      <p class="eyebrow">Built by</p>
+      <h1>{{ student_name }}</h1>
+      <p class="lead">{{ lab_name }}</p>
+      <p class="muted small">Module: Databases &amp; Storage on AWS, week 5 · Environment: <span class="mono">{{ app_env }}</span></p>
+    </div>
+  </div>
+</section>
+
+<div class="feature-grid">
+  <article class="panel feature">
+    <span class="feature-icon">{% include "core/_icon.html" with name="image" %}</span>
+    <h3>Photos in Amazon S3</h3>
+    <p>Private and versioned. The original is stored unchanged as evidence, and nobody can permanently delete a version.</p>
+  </article>
+  <article class="panel feature">
+    <span class="feature-icon">{% include "core/_icon.html" with name="copy-region" %}</span>
+    <h3>Copied to a second Region</h3>
+    <p>Every photo and its details are replicated to another AWS Region, so they survive the loss of a whole Region.</p>
+  </article>
+  <article class="panel feature">
+    <span class="feature-icon">{% include "core/_icon.html" with name="database" %}</span>
+    <h3>Details in Amazon RDS</h3>
+    <p>PostgreSQL, Multi-AZ, in private subnets. Each record links to its photo by key, version and checksum.</p>
+  </article>
+  <article class="panel feature">
+    <span class="feature-icon">{% include "core/_icon.html" with name="server" %}</span>
+    <h3>Django on ECS Fargate</h3>
+    <p>Two or more tasks across two Availability Zones behind an Application Load Balancer, released blue/green.</p>
+  </article>
+  <article class="panel feature">
+    <span class="feature-icon">{% include "core/_icon.html" with name="globe" %}</span>
+    <h3>Delivered by CloudFront</h3>
+    <p>Photos load from the nearest edge location. Origin Access Control keeps the bucket itself private.</p>
+  </article>
+  <article class="panel feature">
+    <span class="feature-icon">{% include "core/_icon.html" with name="shield" %}</span>
+    <h3>No credentials in code</h3>
+    <p>Configuration comes from Parameter Store, database credentials from Secrets Manager, CI access from OIDC.</p>
+  </article>
+</div>
+{% endblock %}
