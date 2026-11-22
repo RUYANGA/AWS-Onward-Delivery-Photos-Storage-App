@@ -5,9 +5,10 @@
   <div>
     <p class="eyebrow">Recovery</p>
     <h1>Deleted photos</h1>
-    <p class="muted">Deleted photos are hidden from the gallery but never destroyed. Restore any of them here.</p>
+    <p class="muted">Deleted photos are hidden from the gallery but kept. Restore them here, or delete them permanently to remove their files from storage.</p>
   </div>
 </div>
+{% include "photos/_notice.html" %}
 {% if photos %}
 <div class="panel table-wrap">
   <table class="table">
@@ -24,6 +25,7 @@
         <td class="mono hide-sm">{{ photo.delivery_reference }}</td>
         <td class="hide-sm">{{ photo.deleted_at|date:"d M Y H:i" }}</td>
         <td class="actions">
+          <div class="action-buttons">
           <form method="post" action="{% url 'photos:restore' photo.id %}"
             data-confirm-tone="restore"
             data-confirm-title="Restore this photo?"
@@ -33,6 +35,15 @@
             {% csrf_token %}
             <button class="button button-small" type="submit">{% include "core/_icon.html" with name="restore" size=16 %}<span data-label>Restore photo</span></button>
           </form>
+          <form method="post" action="{% url 'photos:purge' photo.id %}"
+            data-confirm-title="Delete this photo permanently?"
+            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
+            data-confirm="Its details are removed from the database and its photo, thumbnail and record are removed from storage. It can't be restored from the app."
+            data-confirm-action="Delete permanently" data-busy>
+            {% csrf_token %}
+            <button class="button button-small button-danger" type="submit">{% include "core/_icon.html" with name="trash" size=16 %}<span data-label>Delete permanently</span></button>
+          </form>
+          </div>
         </td>
       </tr>
     {% endfor %}

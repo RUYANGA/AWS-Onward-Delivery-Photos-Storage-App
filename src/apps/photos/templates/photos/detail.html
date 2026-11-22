@@ -77,6 +77,17 @@
         <button class="button button-primary" type="submit">{% include "core/_icon.html" with name="restore" %}<span data-label>Restore photo</span></button>
       </form>
     </section>
+    <section class="panel danger-zone">
+      <form class="panel-body action-row" method="post" action="{% url 'photos:purge' photo.id %}"
+            data-confirm-title="Delete this photo permanently?"
+            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
+            data-confirm="Its details are removed from the database and its photo, thumbnail and record are removed from storage. It can't be restored from the app."
+            data-confirm-action="Delete permanently" data-busy>
+        {% csrf_token %}
+        <p class="muted small">Deleting permanently removes the photo and its files from storage.</p>
+        <button class="button button-danger" type="submit">{% include "core/_icon.html" with name="trash" %}<span data-label>Delete permanently</span></button>
+      </form>
+    </section>
     {% else %}
     <section class="panel danger-zone">
       <form class="panel-body action-row" method="post" action="{% url 'photos:delete' photo.id %}"

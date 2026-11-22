@@ -376,6 +376,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--focus); box-sha
 .table tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover { background: var(--surface-2); }
 .table .actions { text-align: right; }
+.action-buttons { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 .table-thumb { width: 64px; height: 48px; object-fit: cover; border-radius: var(--radius-s); border: 1px solid var(--line); }
 .title-cell { display: flex; align-items: center; gap: .85rem; }
 .title-cell a { font-weight: 600; text-decoration: none; }

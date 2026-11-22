@@ -21,6 +21,7 @@ NOTICES = {
     "uploaded": "Photo uploaded. It is stored and replicated as delivery evidence.",
     "deleted": "Photo moved to Deleted photos. You can restore it from there.",
     "restored": "Photo restored to the gallery.",
+    "purged": "Photo deleted permanently, with its files.",
 }
 MEDIA_KEY_RE = re.compile(r"^(originals|thumbnails)/\d{4}/\d{2}/[0-9a-f\-]{36}\.(jpg|png|webp)$")
 
@@ -131,10 +132,23 @@ def restore(request, photo_id):
     return _gallery_with_notice("restored")
 
 
+@require_POST
+def purge(request, photo_id):
+    # Only photos already in Deleted photos. Removing the row also removes the photo, thumbnail
+    # and sidecar from S3 (signals.py); the replica in the recovery Region keeps its copy.
+    photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=False)
+    photo.delete()
+    log.info("photo deleted permanently", extra={"photo_id": str(photo_id)})
+    return _see_other(f"{reverse('photos:deleted')}?notice=purged")
+
+
 @require_safe
 def deleted(request):
     photos = Photo.objects.filter(deleted_at__isnull=False).order_by("-deleted_at")[:200]
-    return render(request, "photos/deleted.html", {"photos": photos})
+    return render(request, "photos/deleted.html", {
+        "photos": photos,
+        "notice": NOTICES.get(request.GET.get("notice", "")),
+    })
 
 
 @require_safe

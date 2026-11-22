@@ -7,7 +7,7 @@ A single full-stack Python application built with **Django 5.2 (LTS)**. Riders u
 - **Upload:** the app checks the file is a real JPEG, PNG or WebP image, stores the **original bytes unchanged** in S3, creates a 480 px WebP thumbnail and writes a JSON sidecar of the details. Keys are random UUIDs and cached as immutable.
 - **Catalogue:** one row per photo in PostgreSQL with the S3 key, version ID and SHA-256 checksum, which link the record to the exact evidence file. No image bytes are stored in the database.
 - **Viewing:** pages come from the app; `/media/*` is served by CloudFront directly from S3. The `/media` route in the app is only a local-development fallback.
-- **Delete and restore:** deleting hides a photo (soft delete). Nothing is removed from S3, and the task role has no delete permission.
+- **Delete and restore:** deleting hides a photo (soft delete) and keeps its files, so it can be restored from Deleted photos. **Delete permanently** (only for photos already in Deleted photos) removes the row, and whenever a photo's row is deleted the app also removes its photo, thumbnail and sidecar from S3 (`signals.py`). S3 keeps the old versions until the lifecycle rule expires them (the bucket policy stops anyone erasing them sooner), and the replica in the recovery Region keeps its copy.
 - **Security:** CSRF tokens on every form, a strict Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff`, and uploads larger than `MAX_UPLOAD_MB` refused (413) before the body is read.
 - **Pages:** gallery with search (`/`), upload (`/upload`), photo details (`/photos/<id>`), deleted photos (`/deleted`), about page with student and lab name (`/about`), health checks (`/healthz`, `/readyz`).
 
@@ -30,6 +30,8 @@ src/
                              views.py, urls.py, templates/photos/, rebuild_catalogue command, tests/
 requirements/              base.txt, prod.txt (+ gunicorn), dev.txt (+ moto, ruff)
 scripts/build-deploy-bundle.sh   release hand-off to CodeDeploy
+scripts/rollback.sh        list releases and roll back to one
+scripts/db-query.sh        read-only SQL against the private RDS database
 deploy/appspec.yaml        CodeDeploy appspec
 ```
 
@@ -77,7 +79,7 @@ python manage.py check --deploy --settings=config.settings.prod
 python manage.py test apps --settings=config.settings.test
 ```
 
-Tests use an in-memory SQLite database and a mocked S3 (moto). They cover upload to gallery, bytes in S3 and not in the database, checksum and versioning, sidecars, soft delete and restore, validation, CSRF, upload limits, media key filtering, search, health checks behind the load balancer, security headers, error pages and the catalogue rebuild.
+Tests use an in-memory SQLite database and a mocked S3 (moto). They cover upload to gallery, bytes in S3 and not in the database, checksum and versioning, sidecars, soft delete and restore, permanent delete removing the S3 files, validation, CSRF, upload limits, media key filtering, search, health checks behind the load balancer, security headers, error pages and the catalogue rebuild.
 
 ## Pipeline
 
@@ -116,6 +118,16 @@ Repository variables: `AWS_REGION` and `AWS_ROLE_ARN` (the infra bootstrap outpu
 Multi-stage `python:3.12-slim` image, runs as UID 10001, no compilers or secrets, served by gunicorn on port 8000. Static files are collected at build time and served by WhiteNoise (CloudFront caches `/static/*`). ECS Fargate runs it with a read-only root filesystem; on Fargate `/tmp` is root-owned, so gunicorn's heartbeat files and any temporary files go to `/dev/shm` (`TMPDIR`).
 
 On start, each task runs `python manage.py migrate_safely`, which applies pending migrations under a PostgreSQL advisory lock, so tasks starting together during a blue/green release or scale-out never race; then gunicorn starts. Keep migrations backward compatible (add columns before using them), because the old version keeps serving until CodeDeploy shifts traffic.
+
+## Query the database
+
+The database is private: only the app tasks can reach it. To look at the data, run a read-only query from a terminal with AWS access:
+
+```bash
+./scripts/db-query.sh "SELECT delivery_reference, title, deleted_at FROM photos ORDER BY created_at DESC"
+```
+
+It starts a one-off copy of the app task (same subnets, security group and Secrets Manager credentials), runs the query in a `READ ONLY` transaction, prints the rows and stops, in about a minute. Writes are refused. Needs the AWS CLI and `jq`; `AWS_REGION` defaults to `eu-west-1`.
 
 ## Disaster recovery
 

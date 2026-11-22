@@ -13,7 +13,9 @@ IMMUTABLE_CACHE = "public, max-age=31536000, immutable"  # keys are random UUIDs
 
 
 class PhotoStore:
-    """All S3 access. The task role can read and write but has no delete permission."""
+    """All S3 access. The task role can read, write and delete current objects in media/ and meta/.
+    Old versions can't be erased: the bucket policy denies that, and the lifecycle rule
+    removes them after the retention period."""
 
     def __init__(self, bucket: str, region: str, endpoint_url: str | None = None,
                  storage_class: str = "INTELLIGENT_TIERING", client=None) -> None:
@@ -50,6 +52,12 @@ class PhotoStore:
             ContentType="application/json",
             StorageClass=self.storage_class,
         )
+
+    def delete(self, *keys: str) -> None:
+        """Remove the current version of each key (S3 keeps the old version until the lifecycle rule
+        expires it; the replica in the recovery Region is not affected)."""
+        for key in keys:
+            self.s3.delete_object(Bucket=self.bucket, Key=key)
 
     def stream(self, key: str) -> tuple[Iterator[bytes], str, int | None]:
         obj = self.s3.get_object(Bucket=self.bucket, Key=key)

@@ -1,6 +1,6 @@
 # AWS-Onward-Delivery-Photos-Storage-App
 
-Django application for Onward Logistics' delivery photos: upload, gallery, details, soft delete
+Django application for Onward Logistics' delivery photos: upload, gallery, details, soft delete, permanent delete
 and restore. Runs on Amazon ECS Fargate. Owned by RUYANGA. The infrastructure lives in
 `AWS-Onward-Delivery-Photos-Storage-Infra`.
 
