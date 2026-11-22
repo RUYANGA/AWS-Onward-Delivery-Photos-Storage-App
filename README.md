@@ -1,6 +1,6 @@
 # Onward Logistics: delivery photos application
 
-A single full-stack Python application built with **Django 5.2 (LTS)**. Riders upload a delivery photo with its title, description, delivery reference, merchant, rider, city and time taken; customers and merchants browse the gallery. Infrastructure lives in [AWS-Onward-Delivery-Photos-Storage-Infra](https://github.com/RUYANGA/AWS-Onward-Delivery-Photos-Storage-Infra).
+A single full-stack Python application built with **Django 5.2 (LTS)**. Riders upload a delivery photo with its title, description, merchant, rider, city and time taken (the app assigns each photo a delivery reference such as `ONW-2026-3F9A1C`); customers and merchants browse the gallery. Infrastructure lives in [AWS-Onward-Delivery-Photos-Storage-Infra](https://github.com/RUYANGA/AWS-Onward-Delivery-Photos-Storage-Infra).
 
 ## How it works
 

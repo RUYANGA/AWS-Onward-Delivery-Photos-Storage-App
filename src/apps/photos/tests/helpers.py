@@ -37,7 +37,6 @@ class MockedS3Mixin:
     def upload(self, photo_bytes=None, filename="delivery.jpg", **overrides):
         data = {
             "title": "Parcel left with reception",
-            "delivery_reference": "ONW-2026-004821",
             "description": "Signed for by the front desk.",
             "merchant_name": "Kivu Crafts",
             "rider_name": "Aline",

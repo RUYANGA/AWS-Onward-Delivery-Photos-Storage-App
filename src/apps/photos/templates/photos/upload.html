@@ -54,15 +54,6 @@
                {% if form.title.errors %}aria-describedby="title-error" aria-invalid="true"{% endif %}>
         {% include "photos/_field_error.html" with field=form.title %}
       </div>
-      <div class="field{% if form.delivery_reference.errors %} has-error{% endif %}">
-        <label for="delivery_reference">Delivery reference</label>
-        <input id="delivery_reference" name="delivery_reference" class="mono" maxlength="64" autocomplete="off"
-               value="{{ form.delivery_reference.value|default_if_none:'' }}" placeholder="ONW-2026-004821" required
-               aria-describedby="delivery_reference-hint{% if form.delivery_reference.errors %} delivery_reference-error{% endif %}"
-               {% if form.delivery_reference.errors %}aria-invalid="true"{% endif %}>
-        <span class="hint" id="delivery_reference-hint">As printed on the parcel label: letters, numbers, - _ or /</span>
-        {% include "photos/_field_error.html" with field=form.delivery_reference %}
-      </div>
       <div class="field{% if form.description.errors %} has-error{% endif %}">
         <label for="description">Description <span class="muted">(optional)</span></label>
         <textarea id="description" name="description" rows="3" maxlength="2000"

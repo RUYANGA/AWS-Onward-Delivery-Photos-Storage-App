@@ -19,7 +19,7 @@ class UploadAndGalleryTests(MockedS3Mixin, TestCase):
 
         gallery = self.client.get("/").content.decode()
         self.assertIn("Parcel left with reception", gallery)
-        self.assertIn("ONW-2026-004821", gallery)
+        self.assertIn(self.only_photo().delivery_reference, gallery)
         self.assertIn("Kigali", gallery)
 
         detail = self.client.get(f"/photos/{self.only_photo().id}").content.decode()
@@ -50,14 +50,24 @@ class UploadAndGalleryTests(MockedS3Mixin, TestCase):
         self.upload()
         photo = self.only_photo()
         sidecar = self.read_json(photo.metadata_key)
-        self.assertEqual(sidecar["delivery_reference"], "ONW-2026-004821")
+        self.assertEqual(sidecar["delivery_reference"], photo.delivery_reference)
         self.assertEqual(sidecar["s3_key"], photo.s3_key)
         self.assertIsNone(sidecar["deleted_at"])
 
+    def test_app_assigns_the_delivery_reference(self):
+        page = self.client.get("/upload").content.decode()
+        self.assertNotIn('name="delivery_reference"', page)
+
+        self.upload(delivery_reference="IGNORED-123")
+        photo = self.only_photo()
+        self.assertRegex(photo.delivery_reference, r"^ONW-\d{4}-[0-9A-F]{6}$")
+        self.assertEqual(photo.delivery_reference, f"ONW-{photo.created_at:%Y}-{photo.id.hex[:6].upper()}")
+
     def test_search_filters_by_reference(self):
         self.upload()
-        self.upload(title="Second drop", delivery_reference="ONW-2026-009999")
-        body = self.client.get("/?q=009999").content.decode()
+        self.upload(title="Second drop")
+        reference = Photo.objects.get(title="Second drop").delivery_reference
+        body = self.client.get(f"/?q={reference[-6:].lower()}").content.decode()
         self.assertIn("Second drop", body)
         self.assertNotIn("Parcel left with reception", body)
 
@@ -114,7 +124,7 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
 
     def test_deleting_rows_from_the_database_removes_their_files(self):
         self.upload()
-        self.upload(title="Second drop", delivery_reference="ONW-2026-009999")
+        self.upload(title="Second drop")
         keys = [k for p in Photo.objects.all() for k in (p.s3_key, p.thumbnail_key, p.metadata_key)]
         with self.captureOnCommitCallbacks(execute=True):
             Photo.objects.all().delete()
@@ -151,12 +161,10 @@ class ValidationTests(MockedS3Mixin, TestCase):
         self.assertIn("readable photo", response.content.decode())
         self.assertEqual(Photo.objects.count(), 0)
 
-    def test_requires_title_and_reference(self):
-        response = self.upload(title="", delivery_reference="!")
-        body = response.content.decode()
+    def test_requires_title(self):
+        response = self.upload(title="")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("Enter a title", body)
-        self.assertIn("delivery reference", body)
+        self.assertIn("Enter a title", response.content.decode())
 
     def test_rejects_oversized_upload(self):
         big = b"\xff\xd8" + b"0" * (6 * 1024 * 1024)
