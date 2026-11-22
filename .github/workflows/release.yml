@@ -76,7 +76,11 @@ jobs:
           ./scripts/build-deploy-bundle.sh build; rc=$?
           set -e
           if [ $rc -eq 0 ]; then
-            aws s3 cp build/deploy-bundle.zip "s3://$DEPLOY_BUCKET/deploy/deploy-bundle.zip"
+            # The label names this release in the pipeline's run history and Rollback dialog.
+            label="$(./scripts/release-label.sh "$IMAGE_TAG")"
+            aws s3 cp build/deploy-bundle.zip "s3://$DEPLOY_BUCKET/deploy/deploy-bundle.zip" \
+              --metadata "codepipeline-artifact-revision-summary=$label"
+            echo "Pipeline label: $label"
           elif [ $rc -ne 3 ]; then
             exit $rc
           fi
