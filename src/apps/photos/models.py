@@ -29,6 +29,8 @@ class Photo(models.Model):
 
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)  # soft delete
+    updated_at = models.DateTimeField(null=True, blank=True)  # last edit; null if never edited
+    revision = models.PositiveIntegerField(default=1)  # +1 per edit; stops two edits overwriting each other
 
     class Meta:
         db_table = "photos"
@@ -48,7 +50,7 @@ class Photo(models.Model):
             return value.isoformat() if value else None
 
         return {
-            "schema": 1,
+            "schema": 2,
             "id": str(self.id),
             "title": self.title,
             "description": self.description,
@@ -67,4 +69,59 @@ class Photo(models.Model):
             "height": self.height,
             "created_at": iso(self.created_at),
             "deleted_at": iso(self.deleted_at),
+            "updated_at": iso(self.updated_at),
+            "revision": self.revision,
+            "history": [change.sidecar() for change in self.changes.order_by("revision")],
+        }
+
+
+class PhotoChange(models.Model):
+    """One edit of a photo: who-what-why record kept as part of the evidence.
+
+    ``changes`` lists each changed detail as {"field", "label", "from", "to"}. When the photo itself
+    was replaced, the previous file stays in S3 and is recorded here, so it can still be shown and
+    verified against its checksum.
+    """
+
+    photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name="changes")
+    revision = models.PositiveIntegerField()  # the photo's revision after this change
+    changed_at = models.DateTimeField(default=timezone.now)
+    reason = models.CharField(max_length=500)
+    changes = models.JSONField(default=list)
+
+    previous_s3_key = models.CharField(max_length=255, null=True, blank=True)
+    previous_s3_version_id = models.CharField(max_length=1024, null=True, blank=True)
+    previous_thumbnail_key = models.CharField(max_length=255, null=True, blank=True)
+    previous_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    previous_content_type = models.CharField(max_length=50, null=True, blank=True)
+    previous_size_bytes = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "photo_changes"
+        ordering = ["-revision"]
+        constraints = [models.UniqueConstraint(fields=["photo", "revision"], name="photo_change_revision_unique")]
+
+    def __str__(self):
+        return f"{self.photo_id} r{self.revision}: {self.reason}"
+
+    @property
+    def replaced_photo(self) -> bool:
+        return bool(self.previous_s3_key)
+
+    @property
+    def previous_size_mb(self) -> float:
+        return (self.previous_size_bytes or 0) / 1_048_576
+
+    def sidecar(self) -> dict:
+        return {
+            "revision": self.revision,
+            "changed_at": self.changed_at.isoformat(),
+            "reason": self.reason,
+            "changes": self.changes,
+            "previous_s3_key": self.previous_s3_key,
+            "previous_s3_version_id": self.previous_s3_version_id,
+            "previous_thumbnail_key": self.previous_thumbnail_key,
+            "previous_sha256": self.previous_sha256,
+            "previous_content_type": self.previous_content_type,
+            "previous_size_bytes": self.previous_size_bytes,
         }

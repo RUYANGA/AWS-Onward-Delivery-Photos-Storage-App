@@ -1,0 +1,98 @@
+{% extends "core/base.html" %}
+{% block title %}Edit {{ photo.delivery_reference }}{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="{% url 'photos:detail' photo.id %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Back to the photo</a>
+  <span aria-hidden="true">/</span>
+  <span class="mono">{{ photo.delivery_reference }}</span>
+</nav>
+<div class="page-head">
+  <div>
+    <h1>Edit delivery photo</h1>
+    <p class="muted">Every change is recorded with its reason. Nothing is overwritten: earlier details and photos stay in the change history.</p>
+  </div>
+</div>
+
+{% if conflict %}
+<div class="notice notice-error" role="alert">
+  {% include "core/_icon.html" with name="alert" size=20 %}
+  <p>{{ conflict }}</p>
+</div>
+{% elif form.errors %}
+<div class="notice notice-error" role="alert">
+  {% include "core/_icon.html" with name="alert" size=20 %}
+  <p>{% if form.non_field_errors %}{{ form.non_field_errors.0 }}{% else %}Check the highlighted fields and save again. If you chose a replacement photo, choose it again.{% endif %}</p>
+</div>
+{% endif %}
+
+<div class="upload-layout">
+  <form class="form panel panel-body" method="post" enctype="multipart/form-data" novalidate data-busy>
+    {% csrf_token %}
+    <input type="hidden" name="revision" value="{{ form.revision.value }}">
+
+    <fieldset>
+      <legend>Photo</legend>
+      <p class="legend-hint">Keep the current photo, or choose a replacement if the wrong photo was uploaded. The current one stays in the change history.</p>
+      <div class="current-photo">
+        <img src="/{{ photo.thumbnail_key }}" alt="Current photo: {{ photo.title }}" width="120" height="90">
+        <div>
+          <strong>Current photo</strong>
+          <p class="hint">{{ photo.width }} × {{ photo.height }} px · {{ photo.size_mb|floatformat:2 }} MB</p>
+          <p class="hint mono">SHA-256 {{ photo.sha256|truncatechars:17 }}</p>
+        </div>
+      </div>
+      <div class="field{% if form.photo.errors %} has-error{% endif %}">
+        <label class="dropzone dropzone-compact" for="photo" data-dropzone data-max-mb="{{ max_mb }}" data-error-target="photo-client-error">
+          <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp"
+                 aria-describedby="photo-hint{% if form.photo.errors %} photo-error{% endif %}"
+                 {% if form.photo.errors %}aria-invalid="true"{% endif %}>
+          <span class="dropzone-empty">
+            <span class="dropzone-icon">{% include "core/_icon.html" with name="image" size=22 %}</span>
+            <strong>Replace photo <span class="muted">(optional)</span></strong>
+            <span class="hint" id="photo-hint">Drop a JPEG, PNG or WebP here or click to choose · up to {{ max_mb }} MB</span>
+          </span>
+          <span class="dropzone-preview">
+            <img data-preview-img alt="Preview of the replacement photo">
+            <span>
+              <span class="name" data-preview-name></span><br>
+              <span class="hint"><span data-preview-size></span> · replaces the current photo when you save</span>
+            </span>
+          </span>
+        </label>
+        <p class="field-error" id="photo-client-error" hidden></p>
+        {% include "photos/_field_error.html" with field=form.photo %}
+      </div>
+    </fieldset>
+
+    {% include "photos/_details_fields.html" %}
+
+    <fieldset>
+      <legend>Reason for the change</legend>
+      <p class="legend-hint">Recorded in the change history, so anyone reviewing this evidence knows why it changed.</p>
+      <div class="field{% if form.reason.errors %} has-error{% endif %}">
+        <label for="reason">Reason</label>
+        <textarea id="reason" name="reason" rows="2" maxlength="500" required
+                  placeholder="Wrong merchant entered at upload"
+                  {% if form.reason.errors %}aria-describedby="reason-error" aria-invalid="true"{% endif %}>{{ form.reason.value|default_if_none:'' }}</textarea>
+        {% include "photos/_field_error.html" with field=form.reason %}
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      <button class="button button-primary" type="submit" data-busy-label="Saving…">{% include "core/_icon.html" with name="check" %}<span data-label>Save changes</span></button>
+      <a class="button button-quiet" href="{% url 'photos:detail' photo.id %}">Cancel</a>
+    </div>
+  </form>
+
+  <aside class="panel panel-body" aria-labelledby="how-heading">
+    <h2 id="how-heading">How edits are recorded</h2>
+    <p class="muted small legend-hint">This photo is evidence, so changes add to its record rather than replace it.</p>
+    <ol class="aside-steps">
+      <li><span><strong>Reason required</strong>Each change is saved with why it was made and when.</span></li>
+      <li><span><strong>Old values kept</strong>The change history shows every detail before and after.</span></li>
+      <li><span><strong>Photos never overwritten</strong>A replacement is stored as a new file; the earlier photo and its checksum stay available.</span></li>
+      <li><span><strong>Reference unchanged</strong>The delivery reference {{ photo.delivery_reference }} never changes.</span></li>
+    </ol>
+  </aside>
+</div>
+{% endblock %}
