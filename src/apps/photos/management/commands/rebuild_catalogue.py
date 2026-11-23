@@ -1,4 +1,5 @@
-"""Disaster recovery: rebuild the photo catalogue from the meta/*.json sidecars in S3.
+"""Disaster recovery: rebuild the photo catalogue (with each photo's change history) from the
+meta/*.json sidecars in S3.
 
   python manage.py rebuild_catalogue --bucket <replica or primary bucket> [--dry-run]
   python manage.py rebuild_catalogue --bucket <bucket> --report-orphans
@@ -15,9 +16,9 @@ import boto3
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from apps.photos.models import Photo
+from apps.photos.models import Photo, PhotoChange
 
-DATE_FIELDS = ("captured_at", "created_at", "deleted_at")
+DATE_FIELDS = ("captured_at", "created_at", "deleted_at", "updated_at")
 COPY_FIELDS = ("title", "description", "delivery_reference", "merchant_name", "rider_name",
                "delivery_city", "s3_key", "s3_version_id", "thumbnail_key", "sha256",
                "content_type", "size_bytes", "width", "height")
@@ -33,11 +34,20 @@ def photo_from_sidecar(doc: dict, metadata_key: str) -> Photo:
     values = {field: doc.get(field) for field in COPY_FIELDS}
     for field in DATE_FIELDS:
         values[field] = datetime.fromisoformat(doc[field]) if doc.get(field) else None
-    return Photo(id=uuid.UUID(doc["id"]), metadata_key=metadata_key, **values)
+    return Photo(id=uuid.UUID(doc["id"]), metadata_key=metadata_key, revision=doc.get("revision") or 1, **values)
+
+
+def changes_from_sidecar(doc: dict, photo: Photo) -> list[PhotoChange]:
+    """The photo's change history (schema 2 sidecars; schema 1 has none)."""
+    changes = []
+    for entry in doc.get("history") or []:
+        fields = {k: v for k, v in entry.items() if k != "changed_at"}
+        changes.append(PhotoChange(photo=photo, changed_at=datetime.fromisoformat(entry["changed_at"]), **fields))
+    return changes
 
 
 class Command(BaseCommand):
-    help = "Rebuild missing photo rows from the meta/*.json sidecars in S3."
+    help = "Rebuild missing photo rows and their change history from the meta/*.json sidecars in S3."
 
     def add_arguments(self, parser):
         parser.add_argument("--bucket", required=True)
@@ -51,6 +61,8 @@ class Command(BaseCommand):
 
         if options["report_orphans"]:
             known_keys = set(Photo.objects.values_list("s3_key", flat=True))
+            known_keys |= set(PhotoChange.objects.exclude(previous_s3_key=None)
+                              .values_list("previous_s3_key", flat=True))  # earlier photos of edited rows
             orphans = [k for k in iter_keys(s3, bucket, "media/originals/") if k not in known_keys]
             self.stdout.write(f"{len(orphans)} original photo(s) without a catalogue row")
             for key in orphans:
@@ -67,7 +79,9 @@ class Command(BaseCommand):
                         skipped += 1
                         continue
                     if not options["dry_run"]:
-                        photo_from_sidecar(doc, key).save(force_insert=True)
+                        photo = photo_from_sidecar(doc, key)
+                        photo.save(force_insert=True)
+                        PhotoChange.objects.bulk_create(changes_from_sidecar(doc, photo))
                     restored += 1
                 except Exception as exc:  # keep going; report at the end
                     failed += 1

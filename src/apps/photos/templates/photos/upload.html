@@ -44,52 +44,7 @@
       </div>
     </fieldset>
 
-    <fieldset>
-      <legend>Delivery details</legend>
-      <p class="legend-hint">Shown in the gallery and kept with the photo.</p>
-      <div class="field{% if form.title.errors %} has-error{% endif %}">
-        <label for="title">Title</label>
-        <input id="title" name="title" maxlength="120" value="{{ form.title.value|default_if_none:'' }}" required
-               placeholder="Parcel left with reception"
-               {% if form.title.errors %}aria-describedby="title-error" aria-invalid="true"{% endif %}>
-        {% include "photos/_field_error.html" with field=form.title %}
-      </div>
-      <div class="field{% if form.description.errors %} has-error{% endif %}">
-        <label for="description">Description <span class="muted">(optional)</span></label>
-        <textarea id="description" name="description" rows="3" maxlength="2000"
-                  placeholder="Where the parcel was left and who received it">{{ form.description.value|default_if_none:'' }}</textarea>
-        {% include "photos/_field_error.html" with field=form.description %}
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Who and where <span class="muted">(optional)</span></legend>
-      <p class="legend-hint">Helps find the photo later in a dispute.</p>
-      <div class="field-row">
-        <div class="field{% if form.merchant_name.errors %} has-error{% endif %}">
-          <label for="merchant_name">Merchant</label>
-          <input id="merchant_name" name="merchant_name" maxlength="120" value="{{ form.merchant_name.value|default_if_none:'' }}">
-          {% include "photos/_field_error.html" with field=form.merchant_name %}
-        </div>
-        <div class="field{% if form.rider_name.errors %} has-error{% endif %}">
-          <label for="rider_name">Rider</label>
-          <input id="rider_name" name="rider_name" maxlength="120" value="{{ form.rider_name.value|default_if_none:'' }}">
-          {% include "photos/_field_error.html" with field=form.rider_name %}
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field{% if form.delivery_city.errors %} has-error{% endif %}">
-          <label for="delivery_city">City</label>
-          <input id="delivery_city" name="delivery_city" maxlength="80" value="{{ form.delivery_city.value|default_if_none:'' }}">
-          {% include "photos/_field_error.html" with field=form.delivery_city %}
-        </div>
-        <div class="field{% if form.captured_at.errors %} has-error{% endif %}">
-          <label for="captured_at">Time taken <span class="muted">(UTC)</span></label>
-          <input id="captured_at" name="captured_at" type="datetime-local" value="{{ form.captured_at.value|default_if_none:'' }}">
-          {% include "photos/_field_error.html" with field=form.captured_at %}
-        </div>
-      </div>
-    </fieldset>
+    {% include "photos/_details_fields.html" %}
 
     <div class="form-actions">
       <button class="button button-primary" type="submit" data-busy-label="Uploading…">{% include "core/_icon.html" with name="upload" %}<span data-label>Upload photo</span></button>

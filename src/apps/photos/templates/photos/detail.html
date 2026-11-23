@@ -31,6 +31,9 @@
       </div>
       <h1>{{ photo.title }}</h1>
       {% if photo.description %}<p class="description">{{ photo.description }}</p>{% endif %}
+      {% if not photo.deleted_at %}
+      <div><a class="button button-small" href="{% url 'photos:edit' photo.id %}">{% include "core/_icon.html" with name="edit" size=16 %}Edit details or photo</a></div>
+      {% endif %}
     </div>
 
     <section class="panel" aria-labelledby="details-heading">
@@ -42,6 +45,7 @@
           <dt>City</dt><dd>{% if photo.delivery_city %}{{ photo.delivery_city }}{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
           <dt>Taken</dt><dd>{% if photo.captured_at %}{{ photo.captured_at|date:"d M Y H:i" }} UTC{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
           <dt>Uploaded</dt><dd>{{ photo.created_at|date:"d M Y H:i" }} UTC</dd>
+          {% if photo.updated_at %}<dt>Last edited</dt><dd>{{ photo.updated_at|date:"d M Y H:i" }} UTC · <a href="#history-heading">revision {{ photo.revision }}</a></dd>{% endif %}
         </dl>
       </div>
     </section>
@@ -64,6 +68,43 @@
       </div>
     </section>
 
+    {% if changes %}
+    <section class="panel" aria-labelledby="history-heading">
+      <div class="panel-head">
+        <h2 id="history-heading">Change history</h2>
+        <span class="muted small">{{ changes|length }} edit{{ changes|length|pluralize }}</span>
+      </div>
+      <ol class="history">
+        {% for change in changes %}
+        <li class="history-item">
+          <div class="history-meta">
+            <span class="label-tag">Revision {{ change.revision }}</span>
+            <time datetime="{{ change.changed_at|date:'c' }}">{{ change.changed_at|date:"d M Y H:i" }} UTC</time>
+          </div>
+          <p class="history-reason">“{{ change.reason }}”</p>
+          <dl class="history-changes">
+            {% for item in change.changes %}{% if item.field != "photo" %}
+            <dt>{{ item.label }}</dt>
+            <dd><del>{% if item.from %}{{ item.from }}{% else %}<span class="not-given">Not given</span>{% endif %}</del><span class="history-arrow" aria-label="changed to">→</span><ins>{% if item.to %}{{ item.to }}{% else %}<span class="not-given">Not given</span>{% endif %}</ins></dd>
+            {% endif %}{% endfor %}
+          </dl>
+          {% if change.replaced_photo %}
+          <div class="history-photo">
+            <img src="/{{ change.previous_thumbnail_key }}" alt="Photo before revision {{ change.revision }}" width="96" height="72" loading="lazy">
+            <div>
+              <strong>Photo replaced</strong>
+              <p class="hint">The previous photo is kept as evidence. {{ change.previous_size_mb|floatformat:2 }} MB · {{ change.previous_content_type }}</p>
+              <p class="copy-row"><code>SHA-256 {{ change.previous_sha256 }}</code></p>
+              <a class="small" href="/{{ change.previous_s3_key }}" target="_blank" rel="noopener">Open previous original {% include "core/_icon.html" with name="external" size=14 %}</a>
+            </div>
+          </div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+
     {% if photo.deleted_at %}
     <section class="panel">
       <form class="panel-body action-row" method="post" action="{% url 'photos:restore' photo.id %}"
@@ -81,7 +122,7 @@
       <form class="panel-body action-row" method="post" action="{% url 'photos:purge' photo.id %}"
             data-confirm-title="Delete this photo permanently?"
             data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
-            data-confirm="Its details are removed from the database and its photo, thumbnail and record are removed from storage. It can't be restored from the app."
+            data-confirm="Its details and change history are removed from the database, and its photos, thumbnails and record are removed from storage. It can't be restored from the app."
             data-confirm-action="Delete permanently" data-busy>
         {% csrf_token %}
         <p class="muted small">Deleting permanently removes the photo and its files from storage.</p>

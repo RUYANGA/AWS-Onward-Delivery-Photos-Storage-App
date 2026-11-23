@@ -11,8 +11,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
-from .forms import PhotoUploadForm
+from .forms import PhotoEditForm, PhotoUploadForm
 from .models import Photo
+from .services.editing import EditConflict, NewImage, apply_edit
 from .services.storage import get_photo_store
 
 log = logging.getLogger(__name__)
@@ -22,7 +23,10 @@ NOTICES = {
     "deleted": "Photo moved to Deleted photos. You can restore it from there.",
     "restored": "Photo restored to the gallery.",
     "purged": "Photo deleted permanently, with its files.",
+    "updated": "Changes saved. The previous details are kept in the change history.",
 }
+CONFLICT_MESSAGE = ("Someone else changed this photo while you were editing. The latest details are shown below; "
+                    "make your change again.")
 def delivery_reference_for(photo_id: uuid.UUID, when) -> str:
     """The app assigns each photo its reference, e.g. ONW-2026-3F9A1C (year + start of the photo id)."""
     return f"ONW-{when:%Y}-{photo_id.hex[:6].upper()}"
@@ -115,7 +119,38 @@ def upload(request):
 @require_safe
 def detail(request, photo_id):
     # Deleted photos stay viewable here: they are still evidence.
-    return render(request, "photos/detail.html", {"photo": get_object_or_404(Photo, pk=photo_id)})
+    photo = get_object_or_404(Photo, pk=photo_id)
+    return render(request, "photos/detail.html", {
+        "photo": photo,
+        "changes": photo.changes.all(),
+        "notice": NOTICES.get(request.GET.get("notice", "")),
+    })
+
+
+@require_http_methods(["GET", "HEAD", "POST"])
+def edit(request, photo_id):
+    # Only live photos can be edited; a deleted photo has to be restored first.
+    photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=True)
+    form = PhotoEditForm(request.POST or None, request.FILES or None, photo=photo)
+    context = {"photo": photo, "form": form, "max_mb": settings.MAX_UPLOAD_MB}
+    if request.method != "POST":
+        return render(request, "photos/edit.html", context)
+    if not form.is_valid():
+        return render(request, "photos/edit.html", context, status=400)
+
+    image = NewImage(form.photo_bytes, form.processed) if form.processed else None
+    try:
+        apply_edit(photo.id, form.cleaned_data["revision"], form.details(), form.cleaned_data["reason"], image)
+    except EditConflict:
+        latest = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=True)
+        return render(request, "photos/edit.html", {
+            "photo": latest,
+            "form": PhotoEditForm(photo=latest),
+            "max_mb": settings.MAX_UPLOAD_MB,
+            "conflict": CONFLICT_MESSAGE,
+        }, status=409)
+    _write_sidecar(Photo.objects.get(pk=photo_id))
+    return _see_other(f"{reverse('photos:detail', args=[photo_id])}?notice=updated")
 
 
 @require_POST
