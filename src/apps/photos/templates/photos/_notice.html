@@ -1,7 +1,0 @@
-{% if notice %}
-<div class="notice" role="status">
-  {% include "core/_icon.html" with name="check" size=20 %}
-  <p>{{ notice }}</p>
-  <button class="notice-dismiss" type="button" data-dismiss aria-label="Dismiss" hidden>{% include "core/_icon.html" with name="x" %}</button>
-</div>
-{% endif %}

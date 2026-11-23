@@ -37,6 +37,13 @@
     </div>
   </footer>
 
+  {# Toasts: short confirmations of what just happened. Problems the user must fix stay inline. #}
+  <div class="toast-region" role="status" aria-live="polite">
+    {% if notice %}{% include "core/_toast.html" with message=notice %}{% endif %}
+  </div>
+  <template id="toast-template">{% include "core/_toast.html" %}</template>
+  <template id="toast-template-error">{% include "core/_toast.html" with tone="error" %}</template>
+
   <dialog class="modal" id="confirm-dialog" data-tone="danger" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="modal-body">
       <span class="modal-icon"><span data-tone-icon="danger">{% include "core/_icon.html" with name="trash" size=22 %}</span><span data-tone-icon="restore">{% include "core/_icon.html" with name="restore" size=22 %}</span></span>
