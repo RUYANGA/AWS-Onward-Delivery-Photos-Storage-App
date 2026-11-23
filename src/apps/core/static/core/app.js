@@ -125,25 +125,67 @@
     });
   });
 
+  // Toasts (region and templates in core/base.html). Without this file a server-rendered toast
+  // simply stays on the page.
+  const toastRegion = document.querySelector(".toast-region");
+  const TOAST_MS = 5000;
+  const MAX_TOASTS = 3;
+
+  function closeToast(toast) {
+    if (toast.dataset.closing) return;
+    toast.dataset.closing = "true";
+    toast.classList.add("is-leaving");
+    // A timer, not animationend: animations are off when the user prefers reduced motion.
+    setTimeout(function () { toast.remove(); }, 200);
+  }
+
+  function armToast(toast) {
+    const dismiss = toast.querySelector("[data-toast-dismiss]");
+    dismiss.hidden = false;
+    dismiss.addEventListener("click", function () { closeToast(toast); });
+    // Pause while the pointer or keyboard focus is on the toast, so it can be read.
+    let timer = null;
+    function start() { clearTimeout(timer); timer = setTimeout(function () { closeToast(toast); }, TOAST_MS); }
+    function stop() { clearTimeout(timer); }
+    toast.addEventListener("mouseenter", stop);
+    toast.addEventListener("mouseleave", start);
+    toast.addEventListener("focusin", stop);
+    toast.addEventListener("focusout", start);
+    start();
+  }
+
+  function showToast(message, tone) {
+    const template = document.getElementById(tone === "error" ? "toast-template-error" : "toast-template");
+    if (!toastRegion || !template) return;
+    const toast = template.content.firstElementChild.cloneNode(true);
+    toast.querySelector("[data-toast-message]").textContent = message;
+    while (toastRegion.children.length >= MAX_TOASTS) toastRegion.firstElementChild.remove();
+    toastRegion.appendChild(toast);
+    armToast(toast);
+  }
+
+  document.querySelectorAll(".toast-region [data-toast]").forEach(armToast);
+
+  // The notice came in the redirect's query string; drop it so a reload does not repeat it.
+  const url = new URL(window.location.href);
+  if (url.searchParams.has("notice")) {
+    url.searchParams.delete("notice");
+    history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+  }
+
   // Copy evidence values (object key, version, checksum).
   document.querySelectorAll("[data-copy]").forEach(function (button) {
     button.hidden = !navigator.clipboard;
+    const what = button.getAttribute("aria-label").replace(/^Copy\s+/, "");  // "object key"
+    const copied = what.charAt(0).toUpperCase() + what.slice(1) + " copied to the clipboard.";
     button.addEventListener("click", function () {
       navigator.clipboard.writeText(button.dataset.copy).then(function () {
-        const label = button.getAttribute("aria-label");
         button.classList.add("copied");
-        button.setAttribute("aria-label", "Copied");
-        setTimeout(function () {
-          button.classList.remove("copied");
-          button.setAttribute("aria-label", label);
-        }, 1500);
+        setTimeout(function () { button.classList.remove("copied"); }, 1500);
+        showToast(copied);
+      }, function () {
+        showToast("Could not copy the " + what + ". Select it and copy it by hand.", "error");
       });
     });
-  });
-
-  // Dismissible notices.
-  document.querySelectorAll("[data-dismiss]").forEach(function (button) {
-    button.hidden = false;
-    button.addEventListener("click", function () { button.closest(".notice").remove(); });
   });
 })();

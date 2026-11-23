@@ -87,6 +87,24 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
         # the S3 object was never touched
         self.assertGreater(self.s3.head_object(Bucket=BUCKET, Key=photo.s3_key)["ContentLength"], 0)
 
+    def toast_region(self, url):
+        body = self.client.get(url).content.decode()
+        return body.split('class="toast-region"', 1)[1].split("</div>\n  <template", 1)[0]
+
+    def test_actions_confirm_with_a_toast(self):
+        for url, message in (
+            ("/?notice=uploaded", "Photo uploaded."),
+            ("/?notice=deleted", "Photo moved to Deleted photos."),
+            ("/?notice=restored", "Photo restored to the gallery."),
+            ("/deleted?notice=purged", "Photo deleted permanently"),
+        ):
+            region = self.toast_region(url)
+            self.assertIn("data-toast", region, url)
+            self.assertIn(message, region, url)
+
+    def test_unknown_notice_shows_no_toast(self):
+        self.assertNotIn("data-toast", self.toast_region("/?notice=anything"))
+
     def test_delete_and_restore_ask_for_confirmation(self):
         self.upload()
         photo = self.only_photo()

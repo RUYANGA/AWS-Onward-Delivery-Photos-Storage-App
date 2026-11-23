@@ -1,0 +1,5 @@
+<div class="toast" data-toast data-tone="{{ tone|default:'ok' }}">
+  <span class="toast-icon">{% if tone == "error" %}{% include "core/_icon.html" with name="alert" size=18 %}{% else %}{% include "core/_icon.html" with name="check" size=18 %}{% endif %}</span>
+  <p data-toast-message>{{ message }}</p>
+  <button class="toast-dismiss" type="button" data-toast-dismiss aria-label="Dismiss" hidden>{% include "core/_icon.html" with name="x" size=16 %}</button>
+</div>
