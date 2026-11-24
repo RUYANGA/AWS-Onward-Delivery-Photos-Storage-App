@@ -1,0 +1,23 @@
+<div class="page-head">
+  <div>
+    <p class="eyebrow">{% if perms.auth.view_user %}Administration{% else %}Editor{% endif %}</p>
+    <h1>Welcome back, {{ user.first_name|default:account_name }}</h1>
+    <p class="muted">{% if perms.auth.view_user %}Manage delivery photos and the people who upload them.{% else %}Upload delivery photos, and correct, delete or restore the ones you uploaded. Other people's photos and deleting permanently are for administrators.{% endif %}</p>
+  </div>
+  {% if perms.photos.add_photo %}<a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}Upload photo</a>{% endif %}
+</div>
+
+<ul class="stats" aria-label="Summary">
+  {% if perms.auth.view_user %}
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="image" %}</span><span class="stat-value">{{ stats.live }}</span><span class="stat-label">Live photos</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="upload" %}</span><span class="stat-value">{{ stats.this_week }}</span><span class="stat-label">Uploaded in the last 7 days</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="edit" %}</span><span class="stat-value">{{ stats.edited }}</span><span class="stat-label">Edited at least once</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="trash" %}</span><span class="stat-value">{{ stats.deleted }}</span><span class="stat-label">In Deleted photos</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="users" %}</span><span class="stat-value">{{ stats.users }}</span><span class="stat-label">Active users</span></li>
+  {% else %}
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="upload" %}</span><span class="stat-value">{{ stats.mine }}</span><span class="stat-label">My uploads</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="clock" %}</span><span class="stat-value">{{ stats.mine_this_week }}</span><span class="stat-label">My uploads in the last 7 days</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="edit" %}</span><span class="stat-value">{{ stats.my_edits }}</span><span class="stat-label">My edits</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="image" %}</span><span class="stat-value">{{ stats.live }}</span><span class="stat-label">Live photos in total</span></li>
+  {% endif %}
+</ul>

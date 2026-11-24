@@ -1,0 +1,58 @@
+{% extends "core/dashboard_base.html" %}
+{% block title %}My account{% endblock %}
+{% block dashboard_content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Account</p>
+    <h1>My account</h1>
+    <p class="muted">Your name appears on the photos you upload and the changes you make.</p>
+  </div>
+</div>
+
+<section class="panel account-card" aria-labelledby="profile-heading">
+  <div class="panel-body account-summary">
+    <span class="account-avatar account-avatar-lg" aria-hidden="true">{{ account_initials|default:"?" }}</span>
+    <div>
+      <h2 id="profile-heading">{{ account_name }}</h2>
+      <p class="muted">{{ user.email }} · <span class="badge{% if user.is_superuser %} badge-ink{% endif %}">{{ account_role }}</span></p>
+      <p class="hint">{% if user.last_login %}Signed in {{ user.last_login|date:"d M Y H:i" }} UTC · {% endif %}Member since {{ user.date_joined|date:"d M Y" }}</p>
+    </div>
+  </div>
+</section>
+
+{% if managed %}
+<div class="notice notice-info" role="note">
+  {% include "core/_icon.html" with name="lock" size=20 %}
+  <p>The administrator's name and password are set in AWS: the name in Parameter Store (<code>ADMIN_NAME</code>) and the password in Secrets Manager. Change them there; the next release applies them.</p>
+</div>
+{% else %}
+<div class="account-grid">
+  <form class="form panel panel-body" method="post" novalidate data-busy data-unsaved aria-labelledby="name-heading">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="name">
+    <h2 id="name-heading" class="form-title">{% include "core/_icon.html" with name="user" %}Name</h2>
+    {% include "accounts/_field.html" with field=profile_form.name autocomplete="name" %}
+    <div class="field">
+      <label for="email-readonly">Email address</label>
+      <input id="email-readonly" type="email" value="{{ user.email }}" disabled aria-describedby="email-hint">
+      <p class="hint" id="email-hint">Only an administrator can change your email address.</p>
+    </div>
+    <div class="form-actions">
+      <button class="button button-primary" type="submit" data-busy-label="Saving…">{% include "core/_icon.html" with name="check" %}<span data-label>Save name</span></button>
+    </div>
+  </form>
+
+  <form class="form panel panel-body" method="post" novalidate data-busy data-unsaved aria-labelledby="password-heading">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="password">
+    <h2 id="password-heading" class="form-title">{% include "core/_icon.html" with name="key" %}Password</h2>
+    {% include "accounts/_field.html" with field=password_form.old_password type="password" password=True autocomplete="current-password" %}
+    {% include "accounts/_field.html" with field=password_form.new_password1 type="password" password=True autocomplete="new-password" hint="At least 12 characters, not a common password, and not too similar to your name or email." %}
+    {% include "accounts/_field.html" with field=password_form.new_password2 type="password" password=True autocomplete="new-password" %}
+    <div class="form-actions">
+      <button class="button button-primary" type="submit" data-busy-label="Changing…">{% include "core/_icon.html" with name="key" %}<span data-label>Change password</span></button>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

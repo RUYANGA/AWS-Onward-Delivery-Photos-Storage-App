@@ -30,8 +30,12 @@ def iter_keys(s3, bucket: str, prefix: str):
             yield obj["Key"]
 
 
+NAME_FIELDS = ("uploaded_by", "deleted_by")  # schema 3; empty for older sidecars
+
+
 def photo_from_sidecar(doc: dict, metadata_key: str) -> Photo:
     values = {field: doc.get(field) for field in COPY_FIELDS}
+    values.update({field: doc.get(field) or "" for field in NAME_FIELDS})
     for field in DATE_FIELDS:
         values[field] = datetime.fromisoformat(doc[field]) if doc.get(field) else None
     return Photo(id=uuid.UUID(doc["id"]), metadata_key=metadata_key, revision=doc.get("revision") or 1, **values)
@@ -42,6 +46,7 @@ def changes_from_sidecar(doc: dict, photo: Photo) -> list[PhotoChange]:
     changes = []
     for entry in doc.get("history") or []:
         fields = {k: v for k, v in entry.items() if k != "changed_at"}
+        fields["changed_by"] = fields.get("changed_by") or ""
         changes.append(PhotoChange(photo=photo, changed_at=datetime.fromisoformat(entry["changed_at"]), **fields))
     return changes
 

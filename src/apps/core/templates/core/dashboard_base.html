@@ -1,0 +1,31 @@
+{% extends "core/base.html" %}
+{% block content %}
+{% with current=request.resolver_match.view_name %}
+<div class="dash">
+  <aside class="sidebar" aria-label="Dashboard">
+    <div class="sidebar-user">
+      <span class="account-avatar" aria-hidden="true">{{ account_initials|default:"?" }}</span>
+      <span class="sidebar-user-text"><strong>{{ account_name }}</strong><small>{{ account_role }}</small></span>
+    </div>
+    <nav class="sidebar-nav">
+      <p class="sidebar-heading">Photos</p>
+      <a class="sidebar-link" href="{% url 'photos:dashboard' %}" {% if current == 'photos:dashboard' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="dashboard" size=18 %}<span>Dashboard</span></a>
+      {% if perms.photos.add_photo %}<a class="sidebar-link" href="{% url 'photos:upload' %}" {% if current == 'photos:upload' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="upload" size=18 %}<span>Upload photo</span></a>{% endif %}
+      {% if perms.photos.delete_photo %}<a class="sidebar-link" href="{% url 'photos:deleted' %}" {% if current == 'photos:deleted' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="trash" size=18 %}<span>Deleted photos</span>{% if stats.deleted %}<span class="sidebar-count">{{ stats.deleted }}</span>{% endif %}</a>{% endif %}
+      <a class="sidebar-link" href="{% url 'photos:gallery' %}">{% include "core/_icon.html" with name="grid" size=18 %}<span>View gallery</span></a>
+
+      {% if perms.auth.view_user %}
+      <p class="sidebar-heading">Administration</p>
+      <a class="sidebar-link" href="{% url 'accounts:users' %}" {% if current == 'accounts:users' or current == 'accounts:user-add' or current == 'accounts:user-edit' or current == 'accounts:user-detail' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="users" size=18 %}<span>Users</span></a>
+      {% endif %}
+
+      <p class="sidebar-heading">Account</p>
+      <a class="sidebar-link" href="{% url 'accounts:account' %}" {% if current == 'accounts:account' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="user" size=18 %}<span>My account</span></a>
+    </nav>
+  </aside>
+  <div class="dash-main">
+    {% block dashboard_content %}{% endblock %}
+  </div>
+</div>
+{% endwith %}
+{% endblock %}

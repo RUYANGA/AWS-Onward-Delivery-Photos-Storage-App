@@ -1,16 +1,22 @@
 # Onward Logistics: delivery photos application
 
-A single full-stack Python application built with **Django 5.2 (LTS)**. Riders upload a delivery photo with its title, description, merchant, rider, city and time taken (the app assigns each photo a delivery reference such as `ONW-2026-3F9A1C`); customers and merchants browse the gallery. Infrastructure lives in [AWS-Onward-Delivery-Photos-Storage-Infra](https://github.com/RUYANGA/AWS-Onward-Delivery-Photos-Storage-Infra).
+A single full-stack Python application built with **Django 5.2 (LTS)**. Administrators upload a delivery photo with its title, description, merchant, rider, city and time taken (the app assigns each photo a delivery reference such as `ONW-2026-3F9A1C`); customers and merchants browse the gallery without signing in. Infrastructure lives in [AWS-Onward-Delivery-Photos-Storage-Infra](https://github.com/RUYANGA/AWS-Onward-Delivery-Photos-Storage-Infra).
 
 ## How it works
 
+- **Roles:** anyone can view the gallery and live photos without signing in. Everyone else signs in on the same page (`/sign-in`) and works in a dashboard with a sidebar:
+  - **Administrator** (the account from `ADMIN_EMAIL`): uploads, edits, deletes, restores and permanently deletes photos, and manages users (`/manage/users`: add, edit, disable, reset the password, delete), and opens any user's page (`/manage/users/<id>`) to see their figures and everything they did. Their name and password are set in AWS, so My account shows them read-only.
+  - **Editor** (added by an administrator with a name, email and password): uploads photos and edits, deletes and restores **only the photos they uploaded** (someone else's photo answers 403 and its Edit/Delete buttons are not shown), sees their own figures on the dashboard (my uploads, my edits), and can change only their own name and password (`/account`). Editors can't delete photos permanently or manage users (403); deleting permanently (`photos.purge_photo`) and managing anyone's photos (`photos.manage_any_photo`) are permissions only administrators have.
+  - The gallery and photo pages have no delete buttons for anyone; deleting happens in the dashboard. Deleted photos and the change history are shown to signed-in users only, and every upload, edit and deletion records who made it (the account and, as evidence, the name at the time, also in the sidecar). Deleting a user keeps their photos and their name in the record.
+- **Activity log:** sign-ins (and failed attempts on an existing account), sign-outs, uploads, edits, deletions, restores, permanent deletions, name and password changes, and administrators' changes to users are recorded with the time and address (`Activity`), filterable on each user's page. Records outlive the photo or user they mention.
+- **Confirmations:** deleting, restoring and deleting permanently, deleting a user, disabling an account or resetting a password, and replacing a photo ask first in a dialog; leaving a form with unsaved changes asks whether to discard them.
 - **Upload:** the app checks the file is a real JPEG, PNG or WebP image, stores the **original bytes unchanged** in S3, creates a 480 px WebP thumbnail and writes a JSON sidecar of the details. Keys are random UUIDs and cached as immutable.
 - **Catalogue:** one row per photo in PostgreSQL with the S3 key, version ID and SHA-256 checksum, which link the record to the exact evidence file. No image bytes are stored in the database.
 - **Viewing:** pages come from the app; `/media/*` is served by CloudFront directly from S3. The `/media` route in the app is only a local-development fallback.
 - **Edit:** a live photo's details can be corrected and the photo itself replaced (`/photos/<id>/edit`). Because the photo is evidence, nothing is overwritten: every edit needs a reason and is saved as a numbered revision in the photo's change history (`PhotoChange`), showing each detail before and after. A replacement photo is stored under new keys; the previous original and thumbnail stay in S3 and are listed in the history with their checksum. The delivery reference and upload time never change. If someone else saved the photo first, the edit is refused (409) and the latest details are shown, so no change is silently overwritten. Deleted photos must be restored before they can be edited. The history is also written to the sidecar, so `rebuild_catalogue` restores it.
 - **Delete and restore:** deleting hides a photo (soft delete) and keeps its files, so it can be restored from Deleted photos. **Delete permanently** (only for photos already in Deleted photos) removes the row and its change history, and whenever a photo's row is deleted the app also removes its photo, thumbnail, sidecar and any earlier replaced photos from S3 (`signals.py`). S3 keeps the old versions until the lifecycle rule expires them (the bucket policy stops anyone erasing them sooner), and the replica in the recovery Region keeps its copy.
-- **Security:** CSRF tokens on every form, a strict Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff`, and uploads larger than `MAX_UPLOAD_MB` refused (413) before the body is read.
-- **Pages:** gallery with search (`/`), upload (`/upload`), photo details (`/photos/<id>`), edit (`/photos/<id>/edit`), deleted photos (`/deleted`), about page with student and lab name (`/about`), health checks (`/healthz`, `/readyz`).
+- **Security:** sessions stored in PostgreSQL that end after 8 hours, a new session key at sign-in, passwords hashed with PBKDF2 and checked by Django's validators (12 characters minimum), sign-in paused for 15 minutes after 5 failures for an account or 20 from one address, the same error for a wrong email or password, CSRF tokens on every form, a strict Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff`, and uploads larger than `MAX_UPLOAD_MB` refused (413) before the body is read.
+- **Pages:** gallery with search (`/`), upload (`/upload`), photo details (`/photos/<id>`), edit (`/photos/<id>/edit`), dashboard (`/manage`, `/deleted`), users (`/manage/users`), my account (`/account`), sign in and out (`/sign-in`, `/sign-out`), about page with student and lab name (`/about`), health checks (`/healthz`, `/readyz`).
 
 ## Project layout
 
@@ -26,6 +32,8 @@ src/
     core/                    health checks (/healthz, /readyz), middleware (health, upload limit,
                              CSP), JSON logging, About and error pages, shared layout and stylesheet,
                              migrate_safely command, tests/
+    accounts/                sign-in and sign-out, permission checks, failed sign-in throttling,
+                             ensure_admin command (creates the administrator), tests/
     photos/                  models.py (photos table), migrations/, forms.py (upload validation),
                              services/ (storage.py: S3, imaging.py: validation and thumbnails),
                              views.py, urls.py, templates/photos/, rebuild_catalogue command, tests/
@@ -52,7 +60,10 @@ All settings come from environment variables. In AWS they are kept in SSM Parame
 | `S3_ENDPOINT_URL` | Local S3 emulator only |
 | `DJANGO_SETTINGS_MODULE` | `config.settings.prod` in the image, `config.settings.dev` for `manage.py` |
 | `CSRF_TRUSTED_ORIGINS` | Defaults to `https://*.cloudfront.net` in production (CloudFront sends the ALB's host name) |
-| `SECRET_KEY` | Optional: nothing is signed (no sessions or login), so a per-process key is generated |
+| `SECRET_KEY` | Signs sessions; every task must share it. Required in production (Secrets Manager); local runs fall back to a fixed or generated key |
+| `ADMIN_EMAIL`, `ADMIN_NAME` | The administrator's sign-in email and name (Parameter Store) |
+| `ADMIN_PASSWORD` | The administrator's password (Secrets Manager). Never put it in the code or the repositories |
+| `SESSION_COOKIE_SECURE` | `true` in production; `false` only for local `http://localhost` |
 
 ## Run locally
 
@@ -61,12 +72,13 @@ docker compose up --build
 # open http://localhost:8000
 ```
 
-This starts PostgreSQL and LocalStack S3 with a versioned bucket, using local-only dummy values. Without Docker:
+This starts PostgreSQL and LocalStack S3 with a versioned bucket, using local-only dummy values. To sign in locally, put `ADMIN_EMAIL`, `ADMIN_NAME` and `ADMIN_PASSWORD` in your git-ignored `.env` before starting; each start creates or updates that administrator. Without Docker:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements/dev.txt
 python manage.py migrate
+python manage.py ensure_admin   # reads ADMIN_EMAIL, ADMIN_NAME, ADMIN_PASSWORD from .env or the environment
 python manage.py runserver      # needs DATABASE_URL, PHOTO_BUCKET (and S3_ENDPOINT_URL for LocalStack)
 ```
 
@@ -122,7 +134,7 @@ Multi-stage `python:3.12-slim` image, runs as UID 10001, no compilers or secrets
 
 ECS checks each task's health by running `GET /healthz` inside the container every 30 seconds (Python, as the image has no curl), so the console shows **Healthy**; a task that fails 3 checks in a row is replaced. The check is added to the task definition by `scripts/build-deploy-bundle.sh` on every release.
 
-On start, each task runs `python manage.py migrate_safely`, which applies pending migrations under a PostgreSQL advisory lock, so tasks starting together during a blue/green release or scale-out never race; then gunicorn starts. Keep migrations backward compatible (add columns before using them), because the old version keeps serving until CodeDeploy shifts traffic.
+On start, each task runs `python manage.py migrate_safely`, which applies pending migrations under a PostgreSQL advisory lock, so tasks starting together during a blue/green release or scale-out never race; then `ensure_admin --if-configured` creates or updates the administrator from `ADMIN_EMAIL`, `ADMIN_NAME` and `ADMIN_PASSWORD`; then gunicorn starts. The password secret is the source of truth: change it in Secrets Manager and the next task start applies it. Keep migrations backward compatible (add columns before using them), because the old version keeps serving until CodeDeploy shifts traffic.
 
 ## Query the database
 

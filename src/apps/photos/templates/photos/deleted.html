@@ -1,28 +1,31 @@
-{% extends "core/base.html" %}
+{% extends "core/dashboard_base.html" %}
 {% block title %}Deleted photos{% endblock %}
-{% block content %}
+{% block dashboard_content %}
 <div class="page-head">
   <div>
-    <p class="eyebrow">Recovery</p>
+    <p class="eyebrow">Photos</p>
     <h1>Deleted photos</h1>
-    <p class="muted">Deleted photos are hidden from the gallery but kept. Restore them here, or delete them permanently to remove their files from storage.</p>
+    <p class="muted">{% if perms.photos.purge_photo %}Hidden from the gallery but kept as evidence. Restore them, or delete them permanently to remove their files from storage.{% else %}Photos you uploaded and then deleted. They are hidden from the gallery but kept as evidence: restore them at any time; only an administrator can delete them permanently.{% endif %}</p>
   </div>
 </div>
+
 {% if photos %}
 <div class="panel table-wrap">
-  <table class="table">
-    <thead><tr><th scope="col">Photo</th><th scope="col" class="hide-sm">Reference</th><th scope="col" class="hide-sm">Deleted (UTC)</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+  <table class="table table-cards">
+    <thead><tr><th scope="col">Photo</th><th scope="col">Deleted (UTC)</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>
     {% for photo in photos %}
       <tr>
-        <td>
+        <td class="cell-main">
           <span class="title-cell">
             <img class="table-thumb" src="/{{ photo.thumbnail_key }}" alt="" width="64" height="48" loading="lazy">
-            <a href="{% url 'photos:detail' photo.id %}">{{ photo.title }}</a>
+            <span class="title-text">
+              <a href="{% url 'photos:detail' photo.id %}">{{ photo.title }}</a>
+              <span class="muted small"><span class="mono">{{ photo.delivery_reference }}</span> · {{ photo.delivery_city|default:"City not given" }}</span>
+            </span>
           </span>
         </td>
-        <td class="mono hide-sm">{{ photo.delivery_reference }}</td>
-        <td class="hide-sm">{{ photo.deleted_at|date:"d M Y H:i" }}</td>
+        <td class="cell-meta" data-label="Deleted"><span class="nowrap">{{ photo.deleted_at|date:"d M Y H:i" }}</span>{% if photo.deleted_by %}<span class="meta-sub muted small">by {{ photo.deleted_by }}</span>{% endif %}</td>
         <td class="actions">
           <div class="action-buttons">
           <form method="post" action="{% url 'photos:restore' photo.id %}"
@@ -32,16 +35,18 @@
             data-confirm="It will be visible in the gallery again for customers and merchants. You can delete it again at any time."
             data-confirm-action="Restore photo" data-busy>
             {% csrf_token %}
-            <button class="button button-small" type="submit">{% include "core/_icon.html" with name="restore" size=16 %}<span data-label>Restore photo</span></button>
+            <button class="button button-small" type="submit">{% include "core/_icon.html" with name="restore" size=16 %}<span data-label>Restore</span></button>
           </form>
+          {% if perms.photos.purge_photo %}
           <form method="post" action="{% url 'photos:purge' photo.id %}"
             data-confirm-title="Delete this photo permanently?"
             data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
-            data-confirm="Its details are removed from the database and its photo, thumbnail and record are removed from storage. It can't be restored from the app."
+            data-confirm="Its details and change history are removed from the database, and its photos, thumbnails and record are removed from storage. It can't be restored from the app."
             data-confirm-action="Delete permanently" data-busy>
             {% csrf_token %}
             <button class="button button-small button-danger" type="submit">{% include "core/_icon.html" with name="trash" size=16 %}<span data-label>Delete permanently</span></button>
           </form>
+          {% endif %}
           </div>
         </td>
       </tr>
@@ -53,8 +58,8 @@
 <div class="empty">
   <div class="empty-icon">{% include "core/_icon.html" with name="inbox" size=28 %}</div>
   <h2>No deleted photos</h2>
-  <p>Anything you delete from the gallery appears here, and can be restored at any time.</p>
-  <a class="button" href="{% url 'photos:gallery' %}">Go to the gallery</a>
+  <p>Photos you delete from the dashboard appear here, and can be restored at any time.</p>
+  <a class="button" href="{% url 'photos:dashboard' %}">Back to live photos</a>
 </div>
 {% endif %}
 {% endblock %}

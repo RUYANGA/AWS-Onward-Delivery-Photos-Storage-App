@@ -1,0 +1,52 @@
+{% extends "core/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="auth-layout">
+  <section class="panel auth-card" aria-labelledby="sign-in-heading">
+    <div class="panel-body">
+      <span class="auth-mark">{% include "core/_icon.html" with name="lock" size=22 %}</span>
+      <p class="eyebrow">Administrators</p>
+      <h1 id="sign-in-heading">Sign in to manage photos</h1>
+      <p class="muted">Anyone can view delivery photos. Sign in to upload, edit, delete or restore them.</p>
+
+      {% if locked %}
+      <div class="notice notice-error" role="alert">
+        {% include "core/_icon.html" with name="alert" size=20 %}
+        <p>{{ locked }}</p>
+      </div>
+      {% elif form.non_field_errors %}
+      <div class="notice notice-error" role="alert">
+        {% include "core/_icon.html" with name="alert" size=20 %}
+        <p>{{ form.non_field_errors.0 }}</p>
+      </div>
+      {% endif %}
+
+      <form class="form" method="post" action="{% url 'accounts:sign-in' %}" novalidate data-busy>
+        {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <div class="field{% if form.username.errors %} has-error{% endif %}">
+          <label for="id_username">Email address</label>
+          <input id="id_username" name="username" type="email" value="{{ form.username.value|default_if_none:'' }}"
+                 autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" required autofocus
+                 {% if form.username.errors %}aria-invalid="true" aria-describedby="username-error"{% endif %}>
+          {% if form.username.errors %}<p class="field-error" id="username-error">{% include "core/_icon.html" with name="alert" size=14 %}{{ form.username.errors.0 }}</p>{% endif %}
+        </div>
+        <div class="field{% if form.password.errors %} has-error{% endif %}">
+          <label for="id_password">Password</label>
+          <div class="password-field">
+            <input id="id_password" name="password" type="password" autocomplete="current-password" required
+                   {% if form.password.errors %}aria-invalid="true" aria-describedby="password-error"{% endif %}>
+            <button class="password-toggle" type="button" data-password-toggle="id_password" aria-label="Show password" aria-pressed="false" hidden>
+              <span data-when="hidden">{% include "core/_icon.html" with name="eye" size=18 %}</span><span data-when="shown">{% include "core/_icon.html" with name="eye-off" size=18 %}</span>
+            </button>
+          </div>
+          {% if form.password.errors %}<p class="field-error" id="password-error">{% include "core/_icon.html" with name="alert" size=14 %}{{ form.password.errors.0 }}</p>{% endif %}
+        </div>
+        <button class="button button-primary button-block" type="submit" data-busy-label="Signing in…">{% include "core/_icon.html" with name="log-in" %}<span data-label>Sign in</span></button>
+      </form>
+    </div>
+    <p class="auth-foot small muted">{% include "core/_icon.html" with name="shield" size=16 %}Sessions end after 8 hours. Repeated failed attempts pause sign-in for 15 minutes.</p>
+  </section>
+  <p class="auth-back"><a href="{% url 'photos:gallery' %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Back to the gallery</a></p>
+</div>
+{% endblock %}

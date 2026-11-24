@@ -4,6 +4,7 @@ import io
 
 import boto3
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from moto import mock_aws
 from PIL import Image
@@ -18,11 +19,28 @@ def make_jpeg(width=1200, height=900, color=(200, 120, 40)) -> bytes:
     return buffer.getvalue()
 
 
+ADMIN_NAME = "Test Admin"
+
+
+def make_admin(email="admin@example.com", name=ADMIN_NAME):
+    first, _, last = name.partition(" ")
+    return get_user_model().objects.create_superuser(username=email, email=email, password="unused-in-tests",
+                                                     first_name=first, last_name=last)
+
+
 class MockedS3Mixin:
-    """Start moto, create a versioned photo bucket and point the PhotoStore at it."""
+    """Start moto, create a versioned photo bucket and point the PhotoStore at it.
+
+    The test client is signed in as an administrator; set ``sign_in_as_admin = False`` to start as a viewer.
+    """
+
+    sign_in_as_admin = True
 
     def setUp(self):
         super().setUp()
+        self.admin = make_admin()
+        if self.sign_in_as_admin:
+            self.client.force_login(self.admin)
         mock = mock_aws()
         mock.start()
         self.addCleanup(mock.stop)

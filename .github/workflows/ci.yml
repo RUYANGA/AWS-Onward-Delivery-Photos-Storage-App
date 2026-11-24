@@ -29,7 +29,11 @@ jobs:
       - name: Migrations are up to date
         run: python manage.py makemigrations --check --dry-run --settings=config.settings.test
       - name: Django deployment checks
-        run: python manage.py check --deploy --settings=config.settings.prod
+        # Production refuses to start without SECRET_KEY (ECS injects it from Secrets Manager).
+        # CI uses a random throwaway key, generated per run and never stored.
+        run: |
+          export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(50))')"
+          python manage.py check --deploy --settings=config.settings.prod
 
   test:
     name: Tests
@@ -56,13 +60,18 @@ jobs:
         run: docker build --pull -t app:candidate .
       - name: Smoke test the image (read-only filesystem, root-owned /tmp, as on Fargate)
         run: |
+          # SECRET_KEY: a random throwaway key, as production refuses to start without one.
           docker run -d --name candidate -p 8000:8000 --read-only --tmpfs /tmp:mode=0755,uid=0,gid=0 \
+            -e SECRET_KEY="$(openssl rand -base64 48)" \
             -e DATABASE_URL=sqlite:////dev/shm/smoke.sqlite3 -e PHOTO_BUCKET=smoke-test app:candidate
           for i in $(seq 1 30); do curl -fsS localhost:8000/healthz && break; sleep 1; done
           curl -fsS localhost:8000/readyz
           curl -fsS localhost:8000/about | grep -q "Delivery photos"
           test "$(docker exec candidate id -u)" = "10001"
           docker rm -f candidate
+      - name: Container logs (only when the smoke test failed)
+        if: failure()
+        run: docker logs candidate || true
 
   secret-scan:
     name: gitleaks

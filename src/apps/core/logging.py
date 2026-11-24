@@ -1,7 +1,8 @@
 import json
 import logging
 
-EXTRA_FIELDS = ("photo_id", "bytes")
+EXTRA_FIELDS = ("photo_id", "bytes", "revision", "replaced_photo", "user_id", "account_id", "email", "ip",
+                "account_created", "password_changed")
 
 
 class JsonFormatter(logging.Formatter):

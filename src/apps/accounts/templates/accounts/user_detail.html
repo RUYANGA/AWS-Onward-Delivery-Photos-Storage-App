@@ -1,0 +1,109 @@
+{% extends "core/dashboard_base.html" %}
+{% block title %}{{ account.get_full_name|default:account.email }}{% endblock %}
+{% block dashboard_content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="{% url 'accounts:users' %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Users</a>
+  <span aria-hidden="true">/</span><span>{{ account.email }}</span>
+</nav>
+
+<section class="panel profile" aria-labelledby="profile-name">
+  <div class="panel-body profile-body">
+    <span class="account-avatar account-avatar-lg" aria-hidden="true">{% if account.first_name %}{{ account.first_name|first|upper }}{{ account.last_name|first|upper }}{% else %}{{ account.email|first|upper }}{% endif %}</span>
+    <div class="profile-text">
+      <h1 id="profile-name">{{ account.get_full_name|default:account.email }}{% if account.pk == user.pk %} <span class="muted small">(you)</span>{% endif %}</h1>
+      <p class="muted">{{ account.email }}</p>
+      <p class="badges">
+        {% if account.is_superuser %}<span class="badge badge-ink">Administrator</span>{% else %}<span class="badge">Editor</span>{% endif %}
+        {% if account.is_active %}<span class="badge">Active</span>{% else %}<span class="badge badge-danger">Disabled</span>{% endif %}
+      </p>
+      <p class="hint">Member since {{ account.date_joined|date:"d M Y" }} · {% if account.last_login %}Last signed in {{ account.last_login|date:"d M Y H:i" }} UTC{% else %}Never signed in{% endif %}</p>
+    </div>
+    <div class="profile-actions">
+      {% if account.is_superuser %}
+      <span class="muted small managed-note">{% include "core/_icon.html" with name="lock" size=14 %}Managed in AWS</span>
+      {% else %}
+      <a class="button" href="{% url 'accounts:user-edit' account.pk %}">{% include "core/_icon.html" with name="edit" size=16 %}Edit user</a>
+      <form method="post" action="{% url 'accounts:user-delete' account.pk %}"
+        data-confirm-title="Delete this user?"
+        data-confirm-subject="{{ account.get_full_name|default:account.email }} · {{ account.email }}"
+        data-confirm="They can no longer sign in. Photos they uploaded or edited stay, with their name in the record, and this activity stays in the audit trail. To keep the account but stop access, disable it instead."
+        data-confirm-action="Delete user" data-busy>
+        {% csrf_token %}
+        <button class="button button-danger" type="submit">{% include "core/_icon.html" with name="trash" size=16 %}<span data-label>Delete</span></button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<ul class="stats" aria-label="Activity summary">
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="upload" %}</span><span class="stat-value">{{ stats.uploads }}</span><span class="stat-label">Photos uploaded</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="edit" %}</span><span class="stat-value">{{ stats.edits }}</span><span class="stat-label">Edits</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="trash" %}</span><span class="stat-value">{{ stats.deleted }}</span><span class="stat-label">Deleted</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="restore" %}</span><span class="stat-value">{{ stats.restored }}</span><span class="stat-label">Restored</span></li>
+  <li class="stat panel"><span class="stat-icon">{% include "core/_icon.html" with name="log-in" %}</span><span class="stat-value">{{ stats.sign_ins }}</span><span class="stat-label">Sign-ins{% if stats.failed %} · <span class="text-danger">{{ stats.failed }} failed</span>{% endif %}</span></li>
+</ul>
+
+<div class="profile-layout">
+  <section class="panel" aria-labelledby="activity-heading">
+    <div class="panel-head">
+      <h2 id="activity-heading">Activity</h2>
+      <span class="muted small">{{ page_obj.paginator.count }} event{{ page_obj.paginator.count|pluralize }}</span>
+    </div>
+    <nav class="chips" aria-label="Filter activity">
+      {% for key, label in filters %}
+      <a class="chip" href="?type={{ key }}" {% if shown == key %}aria-current="true"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    {% if events %}
+    <ol class="timeline">
+      {% for event in events %}
+      <li class="timeline-item">
+        <span class="timeline-icon{% if event.tone %} tone-{{ event.tone }}{% endif %}">{% include "core/_icon.html" with name=event.icon size=16 %}</span>
+        <div class="timeline-body">
+          <p class="timeline-title">
+            {% if event.account_id == account.pk and event.user_id != account.pk %}
+              {% if event.action == "user_added" %}Account added{% else %}Account updated{% endif %} by <strong>{{ event.actor_name|default:"an administrator" }}</strong>
+            {% else %}
+              {{ event.get_action_display }}
+            {% endif %}
+          </p>
+          {% if event.photo_id and event.action != "purged" %}
+          <p class="timeline-subject"><a href="{% url 'photos:detail' event.photo_id %}">{{ event.subject }}</a></p>
+          {% elif event.subject and event.account_id != account.pk %}
+          <p class="timeline-subject">{{ event.subject }}</p>
+          {% endif %}
+          {% if event.detail %}<p class="timeline-detail">{{ event.detail }}</p>{% endif %}
+          <p class="timeline-meta"><time datetime="{{ event.at|date:'c' }}">{{ event.at|date:"d M Y H:i" }} UTC</time>{% if event.ip_address %} · <span class="mono">{{ event.ip_address }}</span>{% endif %}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pager pager-inset" aria-label="Pages">
+      {% if page_obj.has_previous %}<a class="button button-small" href="?type={{ shown }}&amp;page={{ page_obj.previous_page_number }}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Newer</a>{% endif %}
+      <span class="muted small">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="button button-small" href="?type={{ shown }}&amp;page={{ page_obj.next_page_number }}">Older{% include "core/_icon.html" with name="arrow-right" size=16 %}</a>{% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="panel-body empty-inline">
+      <p class="muted">No {% if shown != "all" %}matching {% endif %}activity yet.</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <aside class="panel" aria-labelledby="uploads-heading">
+    <div class="panel-head"><h2 id="uploads-heading">Recent uploads</h2></div>
+    {% if recent_uploads %}
+    <ul class="mini-grid">
+      {% for photo in recent_uploads %}
+      <li><a href="{% url 'photos:detail' photo.id %}" title="{{ photo.delivery_reference }} · {{ photo.title }}"><img src="/{{ photo.thumbnail_key }}" alt="{{ photo.title }}" width="120" height="90" loading="lazy"></a></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="panel-body"><p class="muted small">No live photos uploaded by this user.</p></div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -27,6 +27,10 @@ def _error(request, code, message):
     return render(request, "core/error.html", {"code": code, "message": message}, status=code)
 
 
+def permission_denied(request, exception=None):
+    return _error(request, 403, "Only administrators can do this. Viewing photos is open to everyone.")
+
+
 def page_not_found(request, exception=None):
     return _error(request, 404, "There's no photo at this address. It may have been deleted.")
 

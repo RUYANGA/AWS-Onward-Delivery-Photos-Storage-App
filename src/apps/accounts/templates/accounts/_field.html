@@ -1,0 +1,19 @@
+<div class="field{% if field.errors %} has-error{% endif %}">
+  <label for="{{ field.id_for_label }}">{{ field.label }}{% if optional %} <span class="muted">(optional)</span>{% endif %}</label>
+  {% if password %}<div class="password-field">{% endif %}
+  <input id="{{ field.id_for_label }}" name="{{ field.html_name }}" type="{{ type|default:'text' }}"
+         {% if type != 'password' %}value="{{ field.value|default_if_none:'' }}"{% endif %}
+         {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+         {% if field.field.max_length %}maxlength="{{ field.field.max_length }}"{% endif %}
+         {% if field.field.required %}required{% endif %}
+         aria-describedby="{% if hint %}{{ field.id_for_label }}-hint{% endif %}{% if field.errors %} {{ field.id_for_label }}-error{% endif %}"
+         {% if field.errors %}aria-invalid="true"{% endif %}>
+  {% if password %}
+    <button class="password-toggle" type="button" data-password-toggle="{{ field.id_for_label }}" aria-label="Show password" aria-pressed="false" hidden>
+      <span data-when="hidden">{% include "core/_icon.html" with name="eye" size=18 %}</span><span data-when="shown">{% include "core/_icon.html" with name="eye-off" size=18 %}</span>
+    </button>
+  </div>
+  {% endif %}
+  {% if hint %}<p class="hint" id="{{ field.id_for_label }}-hint">{{ hint }}</p>{% endif %}
+  {% if field.errors %}<p class="field-error" id="{{ field.id_for_label }}-error">{% include "core/_icon.html" with name="alert" size=14 %}{{ field.errors.0 }}</p>{% endif %}
+</div>

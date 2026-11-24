@@ -1,7 +1,7 @@
-{% extends "core/base.html" %}
+{% extends "core/dashboard_base.html" %}
 {% block title %}Upload photo{% endblock %}
-{% block content %}
-<nav class="breadcrumb" aria-label="Breadcrumb"><a href="{% url 'photos:gallery' %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Gallery</a></nav>
+{% block dashboard_content %}
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="{% url 'photos:dashboard' %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Dashboard</a></nav>
 <div class="page-head">
   <div>
     <h1>Upload a delivery photo</h1>
@@ -17,7 +17,7 @@
 {% endif %}
 
 <div class="upload-layout">
-  <form class="form panel panel-body" method="post" enctype="multipart/form-data" novalidate data-busy>
+  <form class="form panel panel-body" method="post" enctype="multipart/form-data" novalidate data-busy data-unsaved>
     {% csrf_token %}
     <fieldset>
       <legend>Photo</legend>
@@ -48,7 +48,7 @@
 
     <div class="form-actions">
       <button class="button button-primary" type="submit" data-busy-label="Uploading…">{% include "core/_icon.html" with name="upload" %}<span data-label>Upload photo</span></button>
-      <a class="button button-quiet" href="{% url 'photos:gallery' %}">Cancel</a>
+      <a class="button button-quiet" href="{% url 'photos:dashboard' %}">Cancel</a>
     </div>
   </form>
 

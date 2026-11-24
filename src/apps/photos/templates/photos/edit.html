@@ -1,6 +1,6 @@
-{% extends "core/base.html" %}
+{% extends "core/dashboard_base.html" %}
 {% block title %}Edit {{ photo.delivery_reference }}{% endblock %}
-{% block content %}
+{% block dashboard_content %}
 <nav class="breadcrumb" aria-label="Breadcrumb">
   <a href="{% url 'photos:detail' photo.id %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Back to the photo</a>
   <span aria-hidden="true">/</span>
@@ -26,7 +26,8 @@
 {% endif %}
 
 <div class="upload-layout">
-  <form class="form panel panel-body" method="post" enctype="multipart/form-data" novalidate data-busy>
+  <form class="form panel panel-body" method="post" enctype="multipart/form-data" novalidate data-busy data-unsaved
+        data-confirm-check="replace-photo" data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}">
     {% csrf_token %}
     <input type="hidden" name="revision" value="{{ form.revision.value }}">
 

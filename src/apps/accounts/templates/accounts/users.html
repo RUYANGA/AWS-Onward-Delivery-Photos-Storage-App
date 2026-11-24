@@ -1,0 +1,84 @@
+{% extends "core/dashboard_base.html" %}
+{% block title %}Users{% endblock %}
+{% block dashboard_content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Administration</p>
+    <h1>Users</h1>
+    <p class="muted">Editors upload photos and edit, delete or restore their own. Administrators manage every photo and user, and alone can delete permanently.</p>
+  </div>
+  <a class="button button-primary" href="{% url 'accounts:user-add' %}">{% include "core/_icon.html" with name="user-plus" %}Add user</a>
+</div>
+
+<div class="toolbar toolbar-split">
+  <span>{{ total }} account{{ total|pluralize }}{% if query %} matching “{{ query }}”{% endif %}</span>
+  <form class="search" method="get" action="{% url 'accounts:users' %}" role="search">
+    <div class="search-field">
+      {% include "core/_icon.html" with name="search" %}
+      <label for="q" class="visually-hidden">Search by name or email</label>
+      <input id="q" name="q" type="search" value="{{ query }}" placeholder="Name or email">
+    </div>
+    <button class="button" type="submit">Search</button>
+  </form>
+</div>
+
+{% if accounts %}
+<div class="panel table-wrap">
+  <table class="table table-cards">
+    <thead><tr><th scope="col">User</th><th scope="col">Role</th><th scope="col">Activity</th><th scope="col">Last sign-in (UTC)</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody>
+    {% for account in accounts %}
+      <tr>
+        <td class="cell-main">
+          <span class="title-cell">
+            <span class="account-avatar account-avatar-muted" aria-hidden="true">{% if account.first_name %}{{ account.first_name|first|upper }}{{ account.last_name|first|upper }}{% else %}{{ account.email|first|upper }}{% endif %}</span>
+            <span class="title-text">
+              <a href="{% url 'accounts:user-detail' account.pk %}">{{ account.get_full_name|default:account.email }}</a>{% if account.pk == user.pk %} <span class="muted small">(you)</span>{% endif %}
+              <span class="muted small">{{ account.email }}</span>
+            </span>
+          </span>
+        </td>
+        <td class="cell-meta" data-label="Role">
+          <span class="badges">{% if account.is_superuser %}<span class="badge badge-ink">Administrator</span>{% else %}<span class="badge">Editor</span>{% endif %}{% if not account.is_active %}<span class="badge badge-danger">Disabled</span>{% endif %}</span>
+        </td>
+        <td class="cell-meta small" data-label="Activity">{{ account.uploads }} upload{{ account.uploads|pluralize }} · {{ account.edits }} edit{{ account.edits|pluralize }}</td>
+        <td class="cell-meta small" data-label="Last sign-in"><span class="nowrap">{% if account.last_login %}{{ account.last_login|date:"d M Y H:i" }}{% else %}<span class="muted">Never</span>{% endif %}</span></td>
+        <td class="actions">
+          <div class="action-buttons">
+            <a class="button button-small button-quiet" href="{% url 'accounts:user-detail' account.pk %}" aria-label="View {{ account.email }}">{% include "core/_icon.html" with name="activity" size=16 %}<span>View</span></a>
+          {% if account.is_superuser %}
+            <span class="muted small managed-note" title="The administrator's name and password are set in AWS (Parameter Store and Secrets Manager).">{% include "core/_icon.html" with name="lock" size=14 %}Managed in AWS</span>
+          {% else %}
+            <a class="button button-small" href="{% url 'accounts:user-edit' account.pk %}" aria-label="Edit {{ account.email }}">{% include "core/_icon.html" with name="edit" size=16 %}<span>Edit</span></a>
+            <form method="post" action="{% url 'accounts:user-delete' account.pk %}"
+              data-confirm-title="Delete this user?"
+              data-confirm-subject="{{ account.get_full_name|default:account.email }} · {{ account.email }}"
+              data-confirm="They can no longer sign in. Photos they uploaded or edited stay, with their name in the record. To keep the account but stop access, disable it instead."
+              data-confirm-action="Delete user" data-busy>
+              {% csrf_token %}
+              <button class="button button-small button-danger" type="submit" aria-label="Delete {{ account.email }}">{% include "core/_icon.html" with name="trash" size=16 %}<span data-label>Delete</span></button>
+            </form>
+          {% endif %}
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% if page_obj.has_previous %}<a class="button" href="?page={{ page_obj.previous_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">{% include "core/_icon.html" with name="arrow-left" %}Previous</a>{% endif %}
+  <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="button" href="?page={{ page_obj.next_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">Next{% include "core/_icon.html" with name="arrow-right" %}</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="empty">
+  <div class="empty-icon">{% include "core/_icon.html" with name="users" size=28 %}</div>
+  <h2>No users match “{{ query }}”</h2>
+  <p>Search by name or email address.</p>
+  <a class="button" href="{% url 'accounts:users' %}">Show all users</a>
+</div>
+{% endif %}
+{% endblock %}

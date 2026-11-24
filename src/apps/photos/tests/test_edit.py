@@ -218,6 +218,8 @@ class RebuildWithHistoryTests(EditTestMixin, TestCase):
         call_command("rebuild_catalogue", bucket=BUCKET, region=settings.AWS_REGION, stdout=out)
         rebuilt = self.only_photo()
         self.assertEqual(rebuilt.revision, 3)
+        self.assertEqual(rebuilt.uploaded_by, "Test Admin")
+        self.assertEqual(list(PhotoChange.objects.values_list("changed_by", flat=True)), ["Test Admin"] * 2)
         self.assertEqual(rebuilt.merchant_name, "Kivu Crafts Ltd")
         self.assertEqual(list(PhotoChange.objects.order_by("revision").values(
             "revision", "reason", "changes", "previous_s3_key", "previous_sha256")), expected)

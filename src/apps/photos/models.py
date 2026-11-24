@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -31,10 +32,18 @@ class Photo(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)  # soft delete
     updated_at = models.DateTimeField(null=True, blank=True)  # last edit; null if never edited
     revision = models.PositiveIntegerField(default=1)  # +1 per edit; stops two edits overwriting each other
+    uploaded_by = models.CharField(max_length=150, blank=True, default="")  # name at the time (evidence)
+    uploader = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name="uploaded_photos")  # the account, for "my uploads"
+    deleted_by = models.CharField(max_length=150, blank=True, default="")
 
     class Meta:
         db_table = "photos"
         ordering = ["-created_at"]
+        permissions = [  # administrators only; editors manage just the photos they uploaded
+            ("purge_photo", "Can delete photos permanently"),
+            ("manage_any_photo", "Can edit, delete and restore photos uploaded by anyone"),
+        ]
 
     def __str__(self):
         return f"{self.delivery_reference}: {self.title}"
@@ -50,7 +59,7 @@ class Photo(models.Model):
             return value.isoformat() if value else None
 
         return {
-            "schema": 2,
+            "schema": 3,
             "id": str(self.id),
             "title": self.title,
             "description": self.description,
@@ -68,7 +77,9 @@ class Photo(models.Model):
             "width": self.width,
             "height": self.height,
             "created_at": iso(self.created_at),
+            "uploaded_by": self.uploaded_by,
             "deleted_at": iso(self.deleted_at),
+            "deleted_by": self.deleted_by,
             "updated_at": iso(self.updated_at),
             "revision": self.revision,
             "history": [change.sidecar() for change in self.changes.order_by("revision")],
@@ -76,7 +87,7 @@ class Photo(models.Model):
 
 
 class PhotoChange(models.Model):
-    """One edit of a photo: who-what-why record kept as part of the evidence.
+    """One edit of a photo: who, what, when and why, recorded kept as part of the evidence.
 
     ``changes`` lists each changed detail as {"field", "label", "from", "to"}. When the photo itself
     was replaced, the previous file stays in S3 and is recorded here, so it can still be shown and
@@ -86,6 +97,9 @@ class PhotoChange(models.Model):
     photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name="changes")
     revision = models.PositiveIntegerField()  # the photo's revision after this change
     changed_at = models.DateTimeField(default=timezone.now)
+    changed_by = models.CharField(max_length=150, blank=True, default="")  # name at the time (evidence)
+    changed_by_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name="photo_changes")
     reason = models.CharField(max_length=500)
     changes = models.JSONField(default=list)
 
@@ -116,6 +130,7 @@ class PhotoChange(models.Model):
         return {
             "revision": self.revision,
             "changed_at": self.changed_at.isoformat(),
+            "changed_by": self.changed_by,
             "reason": self.reason,
             "changes": self.changes,
             "previous_s3_key": self.previous_s3_key,

@@ -33,6 +33,12 @@ services:
       S3_ENDPOINT_URL: http://s3:4566
       STUDENT_NAME: "Merci RUYANGA"
       CSRF_COOKIE_SECURE: "false"     # local http://localhost
+      SESSION_COOKIE_SECURE: "false"
+      SECRET_KEY: local-compose-only-not-a-secret
       APP_ENV: local
+      # The administrator is read from your git-ignored .env (see .env.example), never from this file.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_NAME: ${ADMIN_NAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     read_only: true
     tmpfs: ["/tmp:mode=0755,uid=0,gid=0"]   # root-owned, as on Fargate

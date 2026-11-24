@@ -22,8 +22,9 @@ COPY --from=build /opt/venv /opt/venv
 COPY manage.py ./
 COPY src ./src
 
-# At build time: ECS runs the container with a read-only root filesystem.
-RUN python manage.py collectstatic --noinput --verbosity 0
+# At build time: ECS runs the container with a read-only root filesystem. The placeholder key
+# exists only for this command; the real one is injected from Secrets Manager at run time.
+RUN SECRET_KEY=collectstatic-only python manage.py collectstatic --noinput --verbosity 0
 
 # The git SHA this image was built from (release.yml passes it); shown on About and /readyz.
 # Declared last so a new version does not invalidate the layers above.
@@ -34,5 +35,6 @@ LABEL org.opencontainers.image.revision=$APP_VERSION
 USER 10001:10001
 EXPOSE 8000
 
-# Apply pending migrations (serialised by an advisory lock), then serve.
-CMD ["sh", "-c", "python manage.py migrate_safely --verbosity 1 && exec gunicorn -c src/config/gunicorn.py config.wsgi:application"]
+# Apply pending migrations (serialised by an advisory lock), make sure the administrator from
+# ADMIN_EMAIL / ADMIN_NAME / ADMIN_PASSWORD exists, then serve.
+CMD ["sh", "-c", "python manage.py migrate_safely --verbosity 1 && python manage.py ensure_admin --if-configured && exec gunicorn -c src/config/gunicorn.py config.wsgi:application"]

@@ -25,7 +25,7 @@ class UploadAndGalleryTests(MockedS3Mixin, TestCase):
         detail = self.client.get(f"/photos/{self.only_photo().id}").content.decode()
         self.assertIn("Kivu Crafts", detail)
         self.assertIn("Signed for by the front desk.", detail)
-        self.assertIn("20 Nov 2026 14:05 UTC", detail)
+        self.assertIn("20 Nov 2026, 14:05 UTC", detail)
 
     def test_photo_bytes_live_in_s3_not_in_database(self):
         original = make_jpeg()
@@ -94,8 +94,8 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
     def test_actions_confirm_with_a_toast(self):
         for url, message in (
             ("/?notice=uploaded", "Photo uploaded."),
-            ("/?notice=deleted", "Photo moved to Deleted photos."),
-            ("/?notice=restored", "Photo restored to the gallery."),
+            ("/manage?notice=deleted", "Photo moved to Deleted photos."),
+            ("/deleted?notice=restored", "Photo restored to the gallery."),
             ("/deleted?notice=purged", "Photo deleted permanently"),
         ):
             region = self.toast_region(url)
@@ -108,14 +108,13 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
     def test_delete_and_restore_ask_for_confirmation(self):
         self.upload()
         photo = self.only_photo()
-        detail = self.client.get(f"/photos/{photo.id}").content.decode()
-        self.assertIn('data-confirm-title="Delete this photo?"', detail)
+        dashboard = self.client.get("/manage").content.decode()
+        self.assertIn('data-confirm-title="Delete this photo?"', dashboard)
 
         self.client.post(f"/photos/{photo.id}/delete")
-        for page in ("/deleted", f"/photos/{photo.id}"):
-            body = self.client.get(page).content.decode()
-            self.assertIn('data-confirm-title="Restore this photo?"', body)
-            self.assertIn('data-confirm-tone="restore"', body)
+        body = self.client.get("/deleted").content.decode()
+        self.assertIn('data-confirm-title="Restore this photo?"', body)
+        self.assertIn('data-confirm-tone="restore"', body)
 
     def test_delete_permanently_removes_row_and_files(self):
         self.upload()
@@ -153,12 +152,10 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
     def test_delete_permanently_asks_for_confirmation(self):
         self.upload()
         photo = self.only_photo()
-        self.assertNotIn("/purge", self.client.get(f"/photos/{photo.id}").content.decode())
         self.client.post(f"/photos/{photo.id}/delete")
-        for page in ("/deleted", f"/photos/{photo.id}"):
-            body = self.client.get(page).content.decode()
-            self.assertIn(f'action="/photos/{photo.id}/purge"', body)
-            self.assertIn('data-confirm-title="Delete this photo permanently?"', body)
+        body = self.client.get("/deleted").content.decode()
+        self.assertIn(f'action="/photos/{photo.id}/purge"', body)
+        self.assertIn('data-confirm-title="Delete this photo permanently?"', body)
 
     def exists(self, key) -> bool:
         try:
@@ -192,6 +189,7 @@ class ValidationTests(MockedS3Mixin, TestCase):
 
     def test_forms_are_protected_against_csrf(self):
         client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin)
         response = client.post("/upload", data={"title": "x"})
         self.assertEqual(response.status_code, 403)
         page = client.get("/upload").content.decode()
