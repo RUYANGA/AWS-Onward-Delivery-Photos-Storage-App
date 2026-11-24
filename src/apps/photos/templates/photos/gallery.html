@@ -60,8 +60,12 @@
   <a class="button" href="{% url 'photos:gallery' %}">Show all photos</a>
   {% else %}
   <h2>No delivery photos yet</h2>
+  {% if perms.photos.add_photo %}
   <p>Upload the first proof-of-delivery photo to start the gallery. It is stored unchanged and replicated to a second Region.</p>
   <a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}Upload photo</a>
+  {% else %}
+  <p>Delivery photos appear here once an administrator uploads them.</p>
+  {% endif %}
   {% endif %}
 </div>
 {% endif %}

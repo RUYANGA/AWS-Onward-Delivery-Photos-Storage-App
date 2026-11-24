@@ -22,7 +22,7 @@
           </span>
         </td>
         <td class="mono hide-sm">{{ photo.delivery_reference }}</td>
-        <td class="hide-sm">{{ photo.deleted_at|date:"d M Y H:i" }}</td>
+        <td class="hide-sm">{{ photo.deleted_at|date:"d M Y H:i" }}{% if photo.deleted_by %}<br><span class="muted small">by {{ photo.deleted_by }}</span>{% endif %}</td>
         <td class="actions">
           <div class="action-buttons">
           <form method="post" action="{% url 'photos:restore' photo.id %}"

@@ -192,6 +192,7 @@ class ValidationTests(MockedS3Mixin, TestCase):
 
     def test_forms_are_protected_against_csrf(self):
         client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin)
         response = client.post("/upload", data={"title": "x"})
         self.assertEqual(response.status_code, 403)
         page = client.get("/upload").content.decode()

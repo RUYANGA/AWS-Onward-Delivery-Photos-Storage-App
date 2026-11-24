@@ -2,7 +2,7 @@
 
 - Nothing is overwritten. A replacement photo is stored under new keys; the previous original and
   thumbnail stay in S3 and are recorded in the photo's change history with their checksum.
-- Every edit is recorded (PhotoChange): when, why, and each detail's old and new value.
+- Every edit is recorded (PhotoChange): who, when, why, and each detail's old and new value.
 - Two people editing at once can't silently overwrite each other: the edit applies only if the photo
   is still at the revision the editor started from.
 """
@@ -80,7 +80,7 @@ def _store_replacement(photo: Photo, image: NewImage) -> dict:
 
 
 def apply_edit(photo_id: uuid.UUID, expected_revision: int, details: dict, reason: str,
-               image: NewImage | None = None) -> Photo:
+               image: NewImage | None = None, actor: str = "") -> Photo:
     """Apply an edit and record it. Raises EditConflict if the photo moved on since the form was opened."""
     current = Photo.objects.filter(pk=photo_id, deleted_at__isnull=True).values_list("revision", flat=True).first()
     if current != expected_revision:
@@ -96,7 +96,7 @@ def apply_edit(photo_id: uuid.UUID, expected_revision: int, details: dict, reaso
                 raise EditConflict
 
             change = PhotoChange(photo=photo, revision=photo.revision + 1, reason=reason.strip(),
-                                 changes=detail_changes(photo, details))
+                                 changed_by=actor, changes=detail_changes(photo, details))
             if new_files:
                 change.previous_s3_key = photo.s3_key
                 change.previous_s3_version_id = photo.s3_version_id

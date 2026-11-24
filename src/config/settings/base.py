@@ -22,7 +22,8 @@ env = environ.Env(
 )
 environ.Env.read_env(ROOT_DIR / ".env")
 
-# Nothing is signed (no sessions, no login), so a per-process key is safe.
+# Signs sessions of signed-in administrators, so every task must share it: in AWS it comes from
+# Secrets Manager (prod.py refuses to start without it). Local runs fall back to a per-process key.
 SECRET_KEY = env("SECRET_KEY", default=None) or get_random_secret_key()
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
@@ -46,8 +47,12 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
 
 INSTALLED_APPS = [
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
     "django.contrib.staticfiles",
     "apps.core",
+    "apps.accounts",
     "apps.photos",
 ]
 
@@ -55,9 +60,11 @@ MIDDLEWARE = [
     "apps.core.middleware.HealthCheckMiddleware",  # first: answers the ALB before host checks
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "apps.core.middleware.UploadSizeLimitMiddleware",  # before CSRF, which reads the body
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.SecurityHeadersMiddleware",
 ]
@@ -74,6 +81,7 @@ TEMPLATES = [
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.template.context_processors.csrf",
+                "django.contrib.auth.context_processors.auth",
                 "apps.core.context_processors.lab",
             ],
         },
@@ -112,6 +120,19 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 WHITENOISE_KEEP_ONLY_HASHED_FILES = True
+
+# Sign-in: administrators manage photos; everyone else can only view them.
+# Sessions are stored in PostgreSQL (shared by every task) and only exist for signed-in users.
+LOGIN_URL = "accounts:sign-in"
+SESSION_COOKIE_AGE = 8 * 60 * 60  # a working day, then sign in again
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"

@@ -20,4 +20,6 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 WHITENOISE_USE_FINDERS = True
-LOGGING = {"version": 1, "disable_existing_loggers": False}
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]  # fast; tests only
+LOGGING = {"version": 1, "disable_existing_loggers": False,
+           "loggers": {"apps.accounts.views": {"level": "ERROR"}}}  # expected sign-in failures

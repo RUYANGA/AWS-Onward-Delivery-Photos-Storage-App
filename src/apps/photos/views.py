@@ -11,6 +11,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
+from apps.accounts.permissions import actor_name, permission_required
+
 from .forms import PhotoEditForm, PhotoUploadForm
 from .models import Photo
 from .services.editing import EditConflict, NewImage, apply_edit
@@ -24,7 +26,10 @@ NOTICES = {
     "restored": "Photo restored to the gallery.",
     "purged": "Photo deleted permanently, with its files.",
     "updated": "Changes saved. The previous details are kept in the change history.",
+    "signed-in": "You're signed in. You can now upload and manage photos.",
+    "signed-out": "You're signed out.",
 }
+ADD, CHANGE, DELETE = "photos.add_photo", "photos.change_photo", "photos.delete_photo"
 CONFLICT_MESSAGE = ("Someone else changed this photo while you were editing. The latest details are shown below; "
                     "make your change again.")
 def delivery_reference_for(photo_id: uuid.UUID, when) -> str:
@@ -74,6 +79,7 @@ def gallery(request):
 
 
 @require_http_methods(["GET", "HEAD", "POST"])
+@permission_required(ADD)
 def upload(request):
     form = PhotoUploadForm(request.POST or None, request.FILES or None)
     context = {"form": form, "max_mb": settings.MAX_UPLOAD_MB}
@@ -104,6 +110,7 @@ def upload(request):
         width=processed.width,
         height=processed.height,
         created_at=now,
+        uploaded_by=actor_name(request.user),
     )
 
     # Evidence first: a row is only created once the photo is safely in S3.
@@ -118,16 +125,20 @@ def upload(request):
 
 @require_safe
 def detail(request, photo_id):
-    # Deleted photos stay viewable here: they are still evidence.
+    # Deleted photos stay viewable by administrators: they are still evidence. Viewers only see live
+    # photos, and the change history (reasons, earlier photos) is for administrators.
     photo = get_object_or_404(Photo, pk=photo_id)
+    if photo.deleted_at and not request.user.has_perm(DELETE):
+        raise Http404
     return render(request, "photos/detail.html", {
         "photo": photo,
-        "changes": photo.changes.all(),
+        "changes": photo.changes.all() if request.user.has_perm(CHANGE) else [],
         "notice": NOTICES.get(request.GET.get("notice", "")),
     })
 
 
 @require_http_methods(["GET", "HEAD", "POST"])
+@permission_required(CHANGE)
 def edit(request, photo_id):
     # Only live photos can be edited; a deleted photo has to be restored first.
     photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=True)
@@ -140,7 +151,8 @@ def edit(request, photo_id):
 
     image = NewImage(form.photo_bytes, form.processed) if form.processed else None
     try:
-        apply_edit(photo.id, form.cleaned_data["revision"], form.details(), form.cleaned_data["reason"], image)
+        apply_edit(photo.id, form.cleaned_data["revision"], form.details(), form.cleaned_data["reason"], image,
+                   actor=actor_name(request.user))
     except EditConflict:
         latest = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=True)
         return render(request, "photos/edit.html", {
@@ -154,35 +166,41 @@ def edit(request, photo_id):
 
 
 @require_POST
+@permission_required(DELETE)
 def delete(request, photo_id):
     # Soft delete: nothing is removed from S3.
     photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=True)
     photo.deleted_at = timezone.now()
-    photo.save(update_fields=["deleted_at"])
+    photo.deleted_by = actor_name(request.user)
+    photo.save(update_fields=["deleted_at", "deleted_by"])
     _write_sidecar(photo)
     return _gallery_with_notice("deleted")
 
 
 @require_POST
+@permission_required(DELETE)
 def restore(request, photo_id):
     photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=False)
     photo.deleted_at = None
-    photo.save(update_fields=["deleted_at"])
+    photo.deleted_by = ""
+    photo.save(update_fields=["deleted_at", "deleted_by"])
     _write_sidecar(photo)
     return _gallery_with_notice("restored")
 
 
 @require_POST
+@permission_required(DELETE)
 def purge(request, photo_id):
     # Only photos already in Deleted photos. Removing the row also removes the photo, thumbnail
     # and sidecar from S3 (signals.py); the replica in the recovery Region keeps its copy.
     photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=False)
     photo.delete()
-    log.info("photo deleted permanently", extra={"photo_id": str(photo_id)})
+    log.info("photo deleted permanently", extra={"photo_id": str(photo_id), "user_id": request.user.pk})
     return _see_other(f"{reverse('photos:deleted')}?notice=purged")
 
 
 @require_safe
+@permission_required(DELETE)
 def deleted(request):
     photos = Photo.objects.filter(deleted_at__isnull=False).order_by("-deleted_at")[:200]
     return render(request, "photos/deleted.html", {

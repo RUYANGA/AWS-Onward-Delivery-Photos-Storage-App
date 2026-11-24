@@ -20,10 +20,22 @@
       <nav class="site-nav" aria-label="Main">
         {% with current=request.resolver_match.view_name %}
         <a class="nav-link" href="{% url 'photos:gallery' %}" {% if current == 'photos:gallery' or current == 'photos:detail' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="grid" %}<span class="label">Gallery</span></a>
-        <a class="nav-link" href="{% url 'photos:deleted' %}" {% if current == 'photos:deleted' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="trash" %}<span class="label">Deleted photos</span></a>
+        {% if perms.photos.delete_photo %}<a class="nav-link" href="{% url 'photos:deleted' %}" {% if current == 'photos:deleted' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="trash" %}<span class="label">Deleted photos</span></a>{% endif %}
         <a class="nav-link" href="{% url 'core:about' %}" {% if current == 'core:about' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="info" %}<span class="label">About</span></a>
+        {% if perms.photos.add_photo %}<a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}<span class="label">Upload photo</span></a>{% endif %}
+        {% if user.is_authenticated %}
+        <div class="account">
+          <span class="account-avatar" aria-hidden="true">{{ account_initials|default:"A" }}</span>
+          <span class="account-text"><strong>{{ account_name }}</strong><small>{% if user.is_superuser %}Administrator{% else %}Photo manager{% endif %}</small></span>
+          <form method="post" action="{% url 'accounts:sign-out' %}">
+            {% csrf_token %}
+            <button class="button button-quiet button-small" type="submit" title="Sign out">{% include "core/_icon.html" with name="log-out" size=16 %}<span class="label">Sign out</span></button>
+          </form>
+        </div>
+        {% elif current != 'accounts:sign-in' %}
+        <a class="button" href="{% url 'accounts:sign-in' %}{% if request.method == 'GET' and current != 'photos:gallery' %}?next={{ request.get_full_path|urlencode }}{% endif %}">{% include "core/_icon.html" with name="log-in" %}<span class="label">Sign in</span></a>
+        {% endif %}
         {% endwith %}
-        <a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}<span class="label">Upload photo</span></a>
       </nav>
     </div>
   </header>
