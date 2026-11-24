@@ -27,7 +27,7 @@ class SignInTests(TestCase):
         page = self.client.get("/").content.decode()
         self.assertIn('href="/sign-in"', page)
         self.assertNotIn('href="/upload"', page)
-        self.assertNotIn('href="/deleted"', page)
+        self.assertNotIn('href="/manage"', page)
 
     def test_sign_in_page(self):
         response = self.client.get("/sign-in")
@@ -40,14 +40,16 @@ class SignInTests(TestCase):
     def test_signing_in_shows_the_administrator_and_management_links(self):
         response = self.sign_in(email="  Merci@Example.com ")  # case and spaces don't matter
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], "/?notice=signed-in")
+        self.assertEqual(response["Location"], "/manage?notice=signed-in")
         page = self.client.get(response["Location"]).content.decode()
         self.assertIn("signed in. You can now upload and manage photos.", page)
         self.assertIn("Merci RUYANGA", page)
         self.assertIn(">MR<", page)
         self.assertIn("Administrator", page)
+        self.assertIn('href="/manage"', page)
+        header = page.split("</header>", 1)[0]
+        self.assertNotIn('href="/upload"', header)  # upload lives in the dashboard
         self.assertIn('href="/upload"', page)
-        self.assertIn('href="/deleted"', page)
         self.assertIn('action="/sign-out"', page)
 
     def test_wrong_password_and_unknown_email_get_the_same_answer(self):
@@ -66,7 +68,7 @@ class SignInTests(TestCase):
         self.assertEqual(self.sign_in(next="/upload")["Location"], "/upload")
         self.client.post("/sign-out")
         for target in ("https://evil.example/", "//evil.example/", "/sign-in"):
-            self.assertEqual(self.sign_in(next=target)["Location"], "/?notice=signed-in", target)
+            self.assertEqual(self.sign_in(next=target)["Location"], "/manage?notice=signed-in", target)
             self.client.post("/sign-out")
 
     def test_account_is_paused_after_repeated_failures(self):
@@ -144,7 +146,7 @@ class ViewerTests(MockedS3Mixin, TestCase):
         self.assertNotIn("Test Admin", body)  # who uploaded is for administrators
 
     def test_management_pages_ask_viewers_to_sign_in(self):
-        for url in ("/upload", f"/photos/{self.photo.id}/edit", "/deleted"):
+        for url in ("/upload", f"/photos/{self.photo.id}/edit", "/manage", "/deleted"):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 302, url)
             self.assertTrue(response["Location"].startswith("/sign-in?next="), url)

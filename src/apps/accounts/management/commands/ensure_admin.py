@@ -20,6 +20,7 @@ from django.core.validators import validate_email
 from django.db import transaction
 
 from apps.accounts.forms import normalise_email
+from apps.accounts.roles import editors_group
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class Command(BaseCommand):
                             help="Do nothing (instead of failing) when ADMIN_EMAIL or ADMIN_PASSWORD is not set.")
 
     def handle(self, *args, **options):
+        editors_group()  # create the Editors group, or bring its permissions up to date
         email = normalise_email(os.environ.get("ADMIN_EMAIL"))
         name = " ".join((os.environ.get("ADMIN_NAME") or "").split())
         password = os.environ.get("ADMIN_PASSWORD") or ""  # only from the environment: never a CLI argument

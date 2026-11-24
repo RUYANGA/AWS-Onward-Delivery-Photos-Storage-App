@@ -1,0 +1,73 @@
+{% extends "core/dashboard_base.html" %}
+{% block title %}{% if account %}Edit user{% else %}Add user{% endif %}{% endblock %}
+{% block dashboard_content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="{% url 'accounts:users' %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}Users</a>
+  {% if account %}<span aria-hidden="true">/</span><span>{{ account.email }}</span>{% endif %}
+</nav>
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Administration</p>
+    <h1>{% if account %}Edit {{ account.get_full_name|default:account.email }}{% else %}Add a user{% endif %}</h1>
+    <p class="muted">{% if account %}Change the user's details. Leave the password empty to keep the current one.{% else %}The new user is an editor: they can upload, edit, delete and restore photos.{% endif %}</p>
+  </div>
+</div>
+
+{% if form.errors %}
+<div class="notice notice-error" role="alert">
+  {% include "core/_icon.html" with name="alert" size=20 %}
+  <p>Check the highlighted fields and save again.</p>
+</div>
+{% endif %}
+
+<div class="form-layout">
+  <form class="form panel panel-body" method="post" novalidate data-busy data-unsaved{% if account %}
+        data-confirm-check="user-access" data-confirm-subject="{{ account.get_full_name|default:account.email }} · {{ account.email }}"{% endif %}>
+    {% csrf_token %}
+    <fieldset>
+      <legend>Details</legend>
+      {% include "accounts/_field.html" with field=form.name autocomplete="off" %}
+      {% include "accounts/_field.html" with field=form.email type="email" autocomplete="off" hint="They sign in with this address." %}
+    </fieldset>
+    <fieldset>
+      <legend>{% if account %}Reset password{% else %}Password{% endif %}</legend>
+      <p class="legend-hint">At least 12 characters, not a common password, and not too similar to the name or email. Share it with the user securely; they can change it under My account.</p>
+      <div class="field-row">
+        {% if account %}
+        {% include "accounts/_field.html" with field=form.password1 type="password" password=True optional=True autocomplete="new-password" %}
+        {% else %}
+        {% include "accounts/_field.html" with field=form.password1 type="password" password=True autocomplete="new-password" %}
+        {% endif %}
+        {% include "accounts/_field.html" with field=form.password2 type="password" password=True autocomplete="new-password" %}
+      </div>
+      {% if account %}<p class="hint">Setting a new password signs the user out on their other devices.</p>{% endif %}
+    </fieldset>
+    {% if account %}
+    <fieldset>
+      <legend>Access</legend>
+      <label class="check">
+        <input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %}>
+        <span><strong>Account active</strong><span class="hint">Untick to stop this user signing in without deleting the account.</span></span>
+      </label>
+    </fieldset>
+    {% endif %}
+    <div class="form-actions">
+      <button class="button button-primary" type="submit" data-busy-label="Saving…">{% include "core/_icon.html" with name="check" %}<span data-label>{% if account %}Save changes{% else %}Add user{% endif %}</span></button>
+      <a class="button button-quiet" href="{% url 'accounts:users' %}">Cancel</a>
+    </div>
+  </form>
+
+  <aside class="panel panel-body" aria-labelledby="role-heading">
+    <h2 id="role-heading">What editors can do</h2>
+    <ul class="role-list">
+      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Sign in on the same page as administrators</li>
+      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Upload photos</li>
+      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Edit photo details or replace a photo, with a reason</li>
+      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Delete photos and restore them from Deleted photos</li>
+      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Change their own name and password</li>
+      <li class="cannot">{% include "core/_icon.html" with name="x" size=16 %}Delete photos permanently</li>
+      <li class="cannot">{% include "core/_icon.html" with name="x" size=16 %}Manage users or change their email</li>
+    </ul>
+  </aside>
+</div>
+{% endblock %}

@@ -94,8 +94,8 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
     def test_actions_confirm_with_a_toast(self):
         for url, message in (
             ("/?notice=uploaded", "Photo uploaded."),
-            ("/?notice=deleted", "Photo moved to Deleted photos."),
-            ("/?notice=restored", "Photo restored to the gallery."),
+            ("/manage?notice=deleted", "Photo moved to Deleted photos."),
+            ("/deleted?notice=restored", "Photo restored to the gallery."),
             ("/deleted?notice=purged", "Photo deleted permanently"),
         ):
             region = self.toast_region(url)
@@ -108,14 +108,13 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
     def test_delete_and_restore_ask_for_confirmation(self):
         self.upload()
         photo = self.only_photo()
-        detail = self.client.get(f"/photos/{photo.id}").content.decode()
-        self.assertIn('data-confirm-title="Delete this photo?"', detail)
+        dashboard = self.client.get("/manage").content.decode()
+        self.assertIn('data-confirm-title="Delete this photo?"', dashboard)
 
         self.client.post(f"/photos/{photo.id}/delete")
-        for page in ("/deleted", f"/photos/{photo.id}"):
-            body = self.client.get(page).content.decode()
-            self.assertIn('data-confirm-title="Restore this photo?"', body)
-            self.assertIn('data-confirm-tone="restore"', body)
+        body = self.client.get("/deleted").content.decode()
+        self.assertIn('data-confirm-title="Restore this photo?"', body)
+        self.assertIn('data-confirm-tone="restore"', body)
 
     def test_delete_permanently_removes_row_and_files(self):
         self.upload()
@@ -153,12 +152,10 @@ class SoftDeleteTests(MockedS3Mixin, TestCase):
     def test_delete_permanently_asks_for_confirmation(self):
         self.upload()
         photo = self.only_photo()
-        self.assertNotIn("/purge", self.client.get(f"/photos/{photo.id}").content.decode())
         self.client.post(f"/photos/{photo.id}/delete")
-        for page in ("/deleted", f"/photos/{photo.id}"):
-            body = self.client.get(page).content.decode()
-            self.assertIn(f'action="/photos/{photo.id}/purge"', body)
-            self.assertIn('data-confirm-title="Delete this photo permanently?"', body)
+        body = self.client.get("/deleted").content.decode()
+        self.assertIn(f'action="/photos/{photo.id}/purge"', body)
+        self.assertIn('data-confirm-title="Delete this photo permanently?"', body)
 
     def exists(self, key) -> bool:
         try:

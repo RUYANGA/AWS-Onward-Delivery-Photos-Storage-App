@@ -20,13 +20,12 @@
       <nav class="site-nav" aria-label="Main">
         {% with current=request.resolver_match.view_name %}
         <a class="nav-link" href="{% url 'photos:gallery' %}" {% if current == 'photos:gallery' or current == 'photos:detail' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="grid" %}<span class="label">Gallery</span></a>
-        {% if perms.photos.delete_photo %}<a class="nav-link" href="{% url 'photos:deleted' %}" {% if current == 'photos:deleted' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="trash" %}<span class="label">Deleted photos</span></a>{% endif %}
+        {% if perms.photos.change_photo %}<a class="nav-link" href="{% url 'photos:dashboard' %}" {% if current == 'photos:dashboard' or current == 'photos:deleted' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="dashboard" %}<span class="label">Dashboard</span></a>{% endif %}
         <a class="nav-link" href="{% url 'core:about' %}" {% if current == 'core:about' %}aria-current="page"{% endif %}>{% include "core/_icon.html" with name="info" %}<span class="label">About</span></a>
-        {% if perms.photos.add_photo %}<a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}<span class="label">Upload photo</span></a>{% endif %}
         {% if user.is_authenticated %}
         <div class="account">
-          <span class="account-avatar" aria-hidden="true">{{ account_initials|default:"A" }}</span>
-          <span class="account-text"><strong>{{ account_name }}</strong><small>{% if user.is_superuser %}Administrator{% else %}Photo manager{% endif %}</small></span>
+          <a class="account-link" href="{% url 'accounts:account' %}" title="My account"><span class="account-avatar" aria-hidden="true">{{ account_initials|default:"?" }}</span>
+          <span class="account-text"><strong>{{ account_name }}</strong><small>{{ account_role }}</small></span></a>
           <form method="post" action="{% url 'accounts:sign-out' %}">
             {% csrf_token %}
             <button class="button button-quiet button-small" type="submit" title="Sign out">{% include "core/_icon.html" with name="log-out" size=16 %}<span class="label">Sign out</span></button>
@@ -58,7 +57,7 @@
 
   <dialog class="modal" id="confirm-dialog" data-tone="danger" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="modal-body">
-      <span class="modal-icon"><span data-tone-icon="danger">{% include "core/_icon.html" with name="trash" size=22 %}</span><span data-tone-icon="restore">{% include "core/_icon.html" with name="restore" size=22 %}</span></span>
+      <span class="modal-icon"><span data-tone-icon="danger">{% include "core/_icon.html" with name="trash" size=22 %}</span><span data-tone-icon="restore">{% include "core/_icon.html" with name="restore" size=22 %}</span><span data-tone-icon="warn">{% include "core/_icon.html" with name="alert" size=22 %}</span></span>
       <div class="modal-text">
         <h2 id="confirm-title" data-confirm-title>Are you sure?</h2>
         <p class="modal-subject mono" data-confirm-subject hidden></p>
@@ -66,8 +65,8 @@
       </div>
     </div>
     <div class="modal-actions">
-      <button class="button" type="button" data-confirm-cancel>Cancel</button>
-      <button class="button button-danger-solid" type="button" data-confirm-accept><span data-tone-icon="danger">{% include "core/_icon.html" with name="trash" size=16 %}</span><span data-tone-icon="restore">{% include "core/_icon.html" with name="restore" size=16 %}</span><span data-label>Confirm</span></button>
+      <button class="button" type="button" data-confirm-cancel><span data-cancel-label>Cancel</span></button>
+      <button class="button button-danger-solid" type="button" data-confirm-accept><span data-tone-icon="danger">{% include "core/_icon.html" with name="trash" size=16 %}</span><span data-tone-icon="restore">{% include "core/_icon.html" with name="restore" size=16 %}</span><span data-tone-icon="warn">{% include "core/_icon.html" with name="check" size=16 %}</span><span data-label>Confirm</span></button>
     </div>
   </dialog>
 </body>

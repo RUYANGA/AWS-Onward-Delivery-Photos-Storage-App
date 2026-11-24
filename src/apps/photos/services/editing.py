@@ -80,7 +80,7 @@ def _store_replacement(photo: Photo, image: NewImage) -> dict:
 
 
 def apply_edit(photo_id: uuid.UUID, expected_revision: int, details: dict, reason: str,
-               image: NewImage | None = None, actor: str = "") -> Photo:
+               image: NewImage | None = None, actor: str = "", user=None) -> Photo:
     """Apply an edit and record it. Raises EditConflict if the photo moved on since the form was opened."""
     current = Photo.objects.filter(pk=photo_id, deleted_at__isnull=True).values_list("revision", flat=True).first()
     if current != expected_revision:
@@ -96,7 +96,8 @@ def apply_edit(photo_id: uuid.UUID, expected_revision: int, details: dict, reaso
                 raise EditConflict
 
             change = PhotoChange(photo=photo, revision=photo.revision + 1, reason=reason.strip(),
-                                 changed_by=actor, changes=detail_changes(photo, details))
+                                 changed_by=actor, changed_by_user=user,
+                                 changes=detail_changes(photo, details))
             if new_files:
                 change.previous_s3_key = photo.s3_key
                 change.previous_s3_version_id = photo.s3_version_id

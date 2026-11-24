@@ -1,0 +1,78 @@
+{% extends "core/dashboard_base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block dashboard_content %}
+{% include "photos/_dashboard_head.html" %}
+
+<div class="toolbar toolbar-split">
+  <span>{{ total }} live photo{{ total|pluralize }}{% if query %} matching “{{ query }}”{% endif %}</span>
+  <form class="search" method="get" action="{% url 'photos:dashboard' %}" role="search">
+    <div class="search-field">
+      {% include "core/_icon.html" with name="search" %}
+      <label for="q" class="visually-hidden">Search by reference, title, city or merchant</label>
+      <input id="q" name="q" type="search" value="{{ query }}" placeholder="Reference, title, city or merchant">
+    </div>
+    <button class="button" type="submit">Search</button>
+  </form>
+</div>
+
+{% if photos %}
+<div class="panel table-wrap">
+  <table class="table table-cards">
+    <thead><tr><th scope="col">Photo</th><th scope="col">Uploaded (UTC)</th><th scope="col">Revision</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody>
+    {% for photo in photos %}
+      <tr>
+        <td class="cell-main">
+          <span class="title-cell">
+            <img class="table-thumb" src="/{{ photo.thumbnail_key }}" alt="" width="64" height="48" loading="lazy">
+            <span class="title-text">
+              <a href="{% url 'photos:detail' photo.id %}">{{ photo.title }}</a>
+              <span class="muted small"><span class="mono">{{ photo.delivery_reference }}</span> · {{ photo.delivery_city|default:"City not given" }}</span>
+            </span>
+          </span>
+        </td>
+        <td class="cell-meta" data-label="Uploaded"><span class="nowrap">{{ photo.created_at|date:"d M Y H:i" }}</span>{% if photo.uploaded_by %}<span class="meta-sub muted small">by {{ photo.uploaded_by }}</span>{% endif %}</td>
+        <td class="cell-meta" data-label="Revision">{% if photo.revision > 1 %}<span class="badge">Edited · r{{ photo.revision }}</span>{% else %}<span class="muted small">Original</span>{% endif %}</td>
+        <td class="actions">
+          <div class="action-buttons">
+            <a class="button button-small button-quiet" href="{% url 'photos:detail' photo.id %}" aria-label="View {{ photo.title }}">{% include "core/_icon.html" with name="external" size=16 %}<span>View</span></a>
+            {% if perms.photos.change_photo %}<a class="button button-small" href="{% url 'photos:edit' photo.id %}" aria-label="Edit {{ photo.title }}">{% include "core/_icon.html" with name="edit" size=16 %}<span>Edit</span></a>{% endif %}
+            {% if perms.photos.delete_photo %}
+            <form method="post" action="{% url 'photos:delete' photo.id %}"
+              data-confirm-title="Delete this photo?"
+              data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
+              data-confirm="It will be hidden from the gallery but kept as evidence. You can restore it at any time from Deleted photos."
+              data-confirm-action="Delete photo" data-busy>
+              {% csrf_token %}
+              <button class="button button-small button-danger" type="submit" aria-label="Delete {{ photo.title }}">{% include "core/_icon.html" with name="trash" size=16 %}<span data-label>Delete</span></button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% if page_obj.has_previous %}<a class="button" href="?page={{ page_obj.previous_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">{% include "core/_icon.html" with name="arrow-left" %}Newer</a>{% endif %}
+  <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="button" href="?page={{ page_obj.next_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">Older{% include "core/_icon.html" with name="arrow-right" %}</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="empty">
+  <div class="empty-icon">{% include "core/_icon.html" with name="image" size=28 %}</div>
+  {% if query %}
+  <h2>No live photos match “{{ query }}”</h2>
+  <p>Check the delivery reference, or try a city or merchant name.</p>
+  <a class="button" href="{% url 'photos:dashboard' %}">Show all photos</a>
+  {% else %}
+  <h2>No live photos</h2>
+  <p>Upload the first proof-of-delivery photo. It is stored unchanged and replicated to a second Region.</p>
+  {% if perms.photos.add_photo %}<a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}Upload photo</a>{% endif %}
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

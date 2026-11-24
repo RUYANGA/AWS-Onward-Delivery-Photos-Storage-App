@@ -10,7 +10,7 @@
 {% if photo.deleted_at %}
 <div class="notice notice-error" role="status">
   {% include "core/_icon.html" with name="alert" size=20 %}
-  <p>This photo was deleted on {{ photo.deleted_at|date:"d M Y H:i" }} UTC{% if photo.deleted_by %} by {{ photo.deleted_by }}{% endif %}. It is hidden from the gallery but still kept as evidence.</p>
+  <p>This photo was deleted on {{ photo.deleted_at|date:"d M Y H:i" }} UTC{% if photo.deleted_by %} by {{ photo.deleted_by }}{% endif %}. It is hidden from the gallery but still kept as evidence. {% if perms.photos.purge_photo %}Restore or delete it permanently{% else %}Restore it{% endif %} from <a href="{% url 'photos:deleted' %}">Deleted photos</a> in the dashboard.</p>
 </div>
 {% endif %}
 
@@ -106,43 +106,6 @@
     </section>
     {% endif %}
 
-    {% if photo.deleted_at and perms.photos.delete_photo %}
-    <section class="panel">
-      <form class="panel-body action-row" method="post" action="{% url 'photos:restore' photo.id %}"
-            data-confirm-tone="restore"
-            data-confirm-title="Restore this photo?"
-            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
-            data-confirm="It will be visible in the gallery again for customers and merchants. You can delete it again at any time."
-            data-confirm-action="Restore photo" data-busy>
-        {% csrf_token %}
-        <p class="muted small">Restoring puts the photo back in the gallery.</p>
-        <button class="button button-primary" type="submit">{% include "core/_icon.html" with name="restore" %}<span data-label>Restore photo</span></button>
-      </form>
-    </section>
-    <section class="panel danger-zone">
-      <form class="panel-body action-row" method="post" action="{% url 'photos:purge' photo.id %}"
-            data-confirm-title="Delete this photo permanently?"
-            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
-            data-confirm="Its details and change history are removed from the database, and its photos, thumbnails and record are removed from storage. It can't be restored from the app."
-            data-confirm-action="Delete permanently" data-busy>
-        {% csrf_token %}
-        <p class="muted small">Deleting permanently removes the photo and its files from storage.</p>
-        <button class="button button-danger" type="submit">{% include "core/_icon.html" with name="trash" %}<span data-label>Delete permanently</span></button>
-      </form>
-    </section>
-    {% elif perms.photos.delete_photo %}
-    <section class="panel danger-zone">
-      <form class="panel-body action-row" method="post" action="{% url 'photos:delete' photo.id %}"
-            data-confirm-title="Delete this photo?"
-            data-confirm-subject="{{ photo.delivery_reference }} · {{ photo.title }}"
-            data-confirm="It will be hidden from the gallery but kept as evidence. You can restore it at any time from Deleted photos."
-            data-confirm-action="Delete photo" data-busy>
-        {% csrf_token %}
-        <p class="muted small">Deleted photos stay recoverable from Deleted photos.</p>
-        <button class="button button-danger" type="submit">{% include "core/_icon.html" with name="trash" %}<span data-label>Delete photo</span></button>
-      </form>
-    </section>
-    {% endif %}
   </div>
 </article>
 {% endblock %}

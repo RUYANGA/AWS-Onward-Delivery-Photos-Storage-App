@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -31,12 +32,15 @@ class Photo(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)  # soft delete
     updated_at = models.DateTimeField(null=True, blank=True)  # last edit; null if never edited
     revision = models.PositiveIntegerField(default=1)  # +1 per edit; stops two edits overwriting each other
-    uploaded_by = models.CharField(max_length=150, blank=True, default="")  # name of the administrator
+    uploaded_by = models.CharField(max_length=150, blank=True, default="")  # name at the time (evidence)
+    uploader = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name="uploaded_photos")  # the account, for "my uploads"
     deleted_by = models.CharField(max_length=150, blank=True, default="")
 
     class Meta:
         db_table = "photos"
         ordering = ["-created_at"]
+        permissions = [("purge_photo", "Can delete photos permanently")]  # administrators only
 
     def __str__(self):
         return f"{self.delivery_reference}: {self.title}"
@@ -90,7 +94,9 @@ class PhotoChange(models.Model):
     photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name="changes")
     revision = models.PositiveIntegerField()  # the photo's revision after this change
     changed_at = models.DateTimeField(default=timezone.now)
-    changed_by = models.CharField(max_length=150, blank=True, default="")  # name of the administrator
+    changed_by = models.CharField(max_length=150, blank=True, default="")  # name at the time (evidence)
+    changed_by_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name="photo_changes")
     reason = models.CharField(max_length=500)
     changes = models.JSONField(default=list)
 

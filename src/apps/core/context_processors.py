@@ -4,11 +4,13 @@ from django.conf import settings
 def lab(request):
     initials = "".join(word[0] for word in settings.STUDENT_NAME.split()[:2]).upper()
     user = getattr(request, "user", None)
-    account_name = ""
+    account_name = account_role = ""
     if user is not None and user.is_authenticated:
         account_name = user.get_full_name() or user.email or user.get_username()
+        account_role = "Administrator" if user.is_superuser else "Editor"
     return {
         "account_name": account_name,
+        "account_role": account_role,
         "account_initials": "".join(word[0] for word in account_name.split()[:2]).upper(),
         "student_name": settings.STUDENT_NAME,
         "student_initials": initials,

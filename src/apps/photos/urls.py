@@ -12,6 +12,7 @@ urlpatterns = [
     path("photos/<uuid:photo_id>/delete", views.delete, name="delete"),
     path("photos/<uuid:photo_id>/restore", views.restore, name="restore"),
     path("photos/<uuid:photo_id>/purge", views.purge, name="purge"),
+    path("manage", views.dashboard, name="dashboard"),
     path("deleted", views.deleted, name="deleted"),
     path("media/<path:subkey>", views.media, name="media"),
 ]
