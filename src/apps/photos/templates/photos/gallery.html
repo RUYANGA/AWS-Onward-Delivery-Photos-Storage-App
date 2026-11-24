@@ -1,28 +1,51 @@
 {% extends "core/base.html" %}
+{% load humanize %}
 {% block title %}Gallery{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
+<section class="hero" aria-labelledby="gallery-heading">
+  <div class="hero-text">
     <p class="eyebrow">Proof of delivery</p>
-    <h1>Delivery photos</h1>
-    <p class="muted">{{ total }} photo{{ total|pluralize }}{% if query %} matching “{{ query }}”{% else %} kept as delivery evidence{% endif %}</p>
+    <h1 id="gallery-heading">Delivery photos</h1>
+    <p class="hero-lead">Find the photo taken at your delivery by a few words from its title or description, its reference, the city, the merchant or the rider.</p>
   </div>
-  <form class="search" method="get" action="{% url 'photos:gallery' %}" role="search">
+  <form class="hero-search" method="get" action="{% url 'photos:gallery' %}" role="search">
+    {% if city %}<input type="hidden" name="city" value="{{ city }}">{% endif %}
+    {% if sort != "newest" %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
     <div class="search-field">
       {% include "core/_icon.html" with name="search" %}
-      <label for="q" class="visually-hidden">Search by reference, title, city or merchant</label>
-      <input id="q" name="q" type="search" value="{{ query }}" placeholder="Reference, title, city or merchant">
+      <label for="q" class="visually-hidden">Search by title, description, reference, city, merchant or rider</label>
+      <input id="q" name="q" type="search" value="{{ query }}" placeholder="Title, reference, city… e.g. parcel reception Kigali" autocomplete="off">
     </div>
-    <button class="button" type="submit">Search</button>
+    <button class="button button-primary" type="submit">Search</button>
   </form>
-</div>
+  <ul class="trust" aria-label="How photos are kept">
+    <li>{% include "core/_icon.html" with name="shield" size=16 %}Stored unchanged, with a SHA-256 checksum</li>
+    <li>{% include "core/_icon.html" with name="copy-region" size=16 %}Copied to a second AWS Region</li>
+    <li>{% include "core/_icon.html" with name="image" size=16 %}{{ all_total|intcomma }} photo{{ all_total|pluralize }} on record</li>
+  </ul>
+</section>
 
-
-{% if query %}
-<div class="toolbar">
-  <span class="chip-filter">Results for “{{ query }}” <a href="{% url 'photos:gallery' %}" aria-label="Clear search">{% include "core/_icon.html" with name="x" size=16 %}</a></span>
+{% if cities or filtered %}
+<div class="filter-bar">
+  <nav class="chips chips-plain" aria-label="Filter by city">
+    <a class="chip" href="?{{ city_query }}" {% if not city %}aria-current="true"{% endif %}>All cities</a>
+    {% for item in cities %}
+    <a class="chip" href="?{% if city_query %}{{ city_query }}&amp;{% endif %}city={{ item.delivery_city|urlencode }}" {% if city|lower == item.delivery_city|lower %}aria-current="true"{% endif %}>{{ item.delivery_city }} <span class="chip-count">{{ item.count }}</span></a>
+    {% endfor %}
+  </nav>
+  <nav class="segmented" aria-label="Sort">
+    <a href="?{{ sort_query }}" {% if sort == "newest" %}aria-current="true"{% endif %}>Newest</a>
+    <a href="?{% if sort_query %}{{ sort_query }}&amp;{% endif %}sort=oldest" {% if sort == "oldest" %}aria-current="true"{% endif %}>Oldest</a>
+  </nav>
 </div>
 {% endif %}
+
+<div class="results-line">
+  <p class="muted">
+    {% if total %}Showing <strong>{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong> of <strong>{{ total|intcomma }}</strong> photo{{ total|pluralize }}{% else %}No photos{% endif %}{% if query %} matching “{{ query }}”{% endif %}{% if city %} in {{ city }}{% endif %}
+  </p>
+  {% if filtered %}<a class="button button-small button-quiet" href="{% url 'photos:gallery' %}">{% include "core/_icon.html" with name="x" size=16 %}Clear filters</a>{% endif %}
+</div>
 
 {% if photos %}
 <ul class="grid">
@@ -31,32 +54,39 @@
     <a class="card" href="{% url 'photos:detail' photo.id %}">
       <span class="thumb">
         <img src="/{{ photo.thumbnail_key }}" alt="{{ photo.title }}" loading="lazy" width="480" height="360">
+        <span class="thumb-tag mono">{{ photo.delivery_reference }}</span>
       </span>
       <span class="card-body">
-        <span class="label-tag">{{ photo.delivery_reference }}</span>
         <span class="card-title">{{ photo.title }}</span>
         <span class="meta">
           <span>{% include "core/_icon.html" with name="pin" size=14 %}{{ photo.delivery_city|default:"City not given" }}</span>
-          <span class="date">{% include "core/_icon.html" with name="clock" size=14 %}{{ photo.created_at|date:"d M Y H:i" }} UTC</span>
+          <time datetime="{{ photo.created_at|date:'c' }}" title="{{ photo.created_at|date:'d M Y H:i' }} UTC">{% include "core/_icon.html" with name="clock" size=14 %}{{ photo.created_at|naturaltime }}</time>
         </span>
       </span>
     </a>
   </li>
   {% endfor %}
 </ul>
+
 {% if page_obj.paginator.num_pages > 1 %}
-<nav class="pager" aria-label="Pages">
-  {% if page_obj.has_previous %}<a class="button" href="?page={{ page_obj.previous_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">{% include "core/_icon.html" with name="arrow-left" %}Newer</a>{% endif %}
-  <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-  {% if page_obj.has_next %}<a class="button" href="?page={{ page_obj.next_page_number }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}">Older{% include "core/_icon.html" with name="arrow-right" %}</a>{% endif %}
+<nav class="pagination" aria-label="Pages">
+  {% if page_obj.has_previous %}<a class="page-step" href="?{% if base_query %}{{ base_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" rel="prev">{% include "core/_icon.html" with name="arrow-left" size=16 %}<span>Previous</span></a>{% else %}<span class="page-step" aria-disabled="true">{% include "core/_icon.html" with name="arrow-left" size=16 %}<span>Previous</span></span>{% endif %}
+  <ol class="page-numbers">
+    {% for number in page_numbers %}
+    {% if number is None %}<li class="page-gap" aria-hidden="true">…</li>
+    {% elif number == page_obj.number %}<li><span class="page-number" aria-current="page">{{ number }}</span></li>
+    {% else %}<li><a class="page-number" href="?{% if base_query %}{{ base_query }}&amp;{% endif %}page={{ number }}" aria-label="Page {{ number }}">{{ number }}</a></li>{% endif %}
+    {% endfor %}
+  </ol>
+  {% if page_obj.has_next %}<a class="page-step" href="?{% if base_query %}{{ base_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" rel="next"><span>Next</span>{% include "core/_icon.html" with name="arrow-right" size=16 %}</a>{% else %}<span class="page-step" aria-disabled="true"><span>Next</span>{% include "core/_icon.html" with name="arrow-right" size=16 %}</span>{% endif %}
 </nav>
 {% endif %}
 {% else %}
 <div class="empty">
   <div class="empty-icon">{% include "core/_icon.html" with name="image" size=28 %}</div>
-  {% if query %}
-  <h2>No photos match “{{ query }}”</h2>
-  <p>Check the delivery reference, or try a city or merchant name.</p>
+  {% if filtered %}
+  <h2>No photos match {% if query %}“{{ query }}”{% endif %}{% if city %} in {{ city }}{% endif %}</h2>
+  <p>Check the spelling or the delivery reference on your receipt, or try fewer words.</p>
   <a class="button" href="{% url 'photos:gallery' %}">Show all photos</a>
   {% else %}
   <h2>No delivery photos yet</h2>
@@ -64,7 +94,7 @@
   <p>Upload the first proof-of-delivery photo to start the gallery. It is stored unchanged and replicated to a second Region.</p>
   <a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}Upload photo</a>
   {% else %}
-  <p>Delivery photos appear here once an administrator uploads them.</p>
+  <p>Delivery photos appear here once they are uploaded.</p>
   {% endif %}
   {% endif %}
 </div>

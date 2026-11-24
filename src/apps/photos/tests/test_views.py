@@ -25,7 +25,7 @@ class UploadAndGalleryTests(MockedS3Mixin, TestCase):
         detail = self.client.get(f"/photos/{self.only_photo().id}").content.decode()
         self.assertIn("Kivu Crafts", detail)
         self.assertIn("Signed for by the front desk.", detail)
-        self.assertIn("20 Nov 2026 14:05 UTC", detail)
+        self.assertIn("20 Nov 2026, 14:05 UTC", detail)
 
     def test_photo_bytes_live_in_s3_not_in_database(self):
         original = make_jpeg()

@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">Photos</p>
     <h1>Deleted photos</h1>
-    <p class="muted">{% if perms.photos.purge_photo %}Hidden from the gallery but kept as evidence. Restore them, or delete them permanently to remove their files from storage.{% else %}Hidden from the gallery but kept as evidence. Restore them at any time; only an administrator can delete them permanently.{% endif %}</p>
+    <p class="muted">{% if perms.photos.purge_photo %}Hidden from the gallery but kept as evidence. Restore them, or delete them permanently to remove their files from storage.{% else %}Photos you uploaded and then deleted. They are hidden from the gallery but kept as evidence: restore them at any time; only an administrator can delete them permanently.{% endif %}</p>
   </div>
 </div>
 

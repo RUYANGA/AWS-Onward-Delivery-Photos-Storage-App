@@ -40,7 +40,10 @@ class Photo(models.Model):
     class Meta:
         db_table = "photos"
         ordering = ["-created_at"]
-        permissions = [("purge_photo", "Can delete photos permanently")]  # administrators only
+        permissions = [  # administrators only; editors manage just the photos they uploaded
+            ("purge_photo", "Can delete photos permanently"),
+            ("manage_any_photo", "Can edit, delete and restore photos uploaded by anyone"),
+        ]
 
     def __str__(self):
         return f"{self.delivery_reference}: {self.title}"

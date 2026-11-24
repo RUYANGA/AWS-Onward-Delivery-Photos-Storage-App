@@ -1,11 +1,20 @@
 {% extends "core/base.html" %}
+{% load humanize %}
 {% block title %}{{ photo.title }}{% endblock %}
 {% block content %}
-<nav class="breadcrumb" aria-label="Breadcrumb">
-  <a href="{% if photo.deleted_at %}{% url 'photos:deleted' %}{% else %}{% url 'photos:gallery' %}{% endif %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}{% if photo.deleted_at %}Deleted photos{% else %}Gallery{% endif %}</a>
-  <span aria-hidden="true">/</span>
-  <span class="mono">{{ photo.delivery_reference }}</span>
-</nav>
+<div class="detail-nav">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="{% if photo.deleted_at %}{% url 'photos:deleted' %}{% else %}{% url 'photos:gallery' %}{% endif %}">{% include "core/_icon.html" with name="arrow-left" size=16 %}{% if photo.deleted_at %}Deleted photos{% else %}Gallery{% endif %}</a>
+    <span aria-hidden="true">/</span>
+    <span class="mono">{{ photo.delivery_reference }}</span>
+  </nav>
+  {% if newer or older %}
+  <nav class="stepper" aria-label="Other photos">
+    {% if newer %}<a class="button button-small button-quiet" href="{% url 'photos:detail' newer.id %}" rel="prev" title="{{ newer.title }}">{% include "core/_icon.html" with name="arrow-left" size=16 %}<span>Newer</span></a>{% else %}<span class="button button-small button-quiet" aria-disabled="true">{% include "core/_icon.html" with name="arrow-left" size=16 %}<span>Newer</span></span>{% endif %}
+    {% if older %}<a class="button button-small button-quiet" href="{% url 'photos:detail' older.id %}" rel="next" title="{{ older.title }}"><span>Older</span>{% include "core/_icon.html" with name="arrow-right" size=16 %}</a>{% else %}<span class="button button-small button-quiet" aria-disabled="true"><span>Older</span>{% include "core/_icon.html" with name="arrow-right" size=16 %}</span>{% endif %}
+  </nav>
+  {% endif %}
+</div>
 
 {% if photo.deleted_at %}
 <div class="notice notice-error" role="status">
@@ -16,46 +25,55 @@
 
 <article class="detail">
   <figure class="photo-frame">
-    <img src="/{{ photo.s3_key }}" alt="{{ photo.title }}" width="{{ photo.width }}" height="{{ photo.height }}">
+    <a class="photo-link" href="/{{ photo.s3_key }}" target="_blank" rel="noopener" title="Open the original in a new tab">
+      <img src="/{{ photo.s3_key }}" alt="{{ photo.title }}" width="{{ photo.width }}" height="{{ photo.height }}">
+    </a>
     <figcaption>
-      <span>{{ photo.width }} × {{ photo.height }} px · {{ photo.size_mb|floatformat:2 }} MB</span>
-      <a href="/{{ photo.s3_key }}" target="_blank" rel="noopener">Open original {% include "core/_icon.html" with name="external" size=14 %}</a>
+      <span>{{ photo.width }} × {{ photo.height }} px · {{ photo.size_mb|floatformat:2 }} MB · {{ photo.content_type|cut:"image/"|upper }}</span>
+      <span class="photo-actions">
+        <a class="button button-small button-quiet" href="/{{ photo.s3_key }}" target="_blank" rel="noopener">{% include "core/_icon.html" with name="external" size=16 %}Open original</a>
+        <a class="button button-small button-quiet" href="/{{ photo.s3_key }}" download="{{ photo.delivery_reference }}.{{ photo.content_type|cut:'image/'|cut:'jpeg'|default:'jpg' }}">{% include "core/_icon.html" with name="download" size=16 %}Download</a>
+        <button class="button button-small button-quiet" type="button" data-copy="@url" aria-label="Copy link to this photo" hidden>{% include "core/_icon.html" with name="link" size=16 %}Copy link</button>
+      </span>
     </figcaption>
   </figure>
 
   <div class="detail-side">
-    <div class="detail-title">
+    <header class="detail-title">
       <div class="tags">
         <span class="label-tag">{{ photo.delivery_reference }}</span>
         {% if photo.deleted_at %}<span class="badge badge-danger">Deleted</span>{% else %}<span class="badge">Live</span>{% endif %}
+        {% if photo.revision > 1 %}<span class="badge badge-muted">Edited</span>{% endif %}
       </div>
       <h1>{{ photo.title }}</h1>
       {% if photo.description %}<p class="description">{{ photo.description }}</p>{% endif %}
-      {% if not photo.deleted_at and perms.photos.change_photo %}
+      <p class="muted small">Uploaded <time datetime="{{ photo.created_at|date:'c' }}" title="{{ photo.created_at|date:'d M Y H:i' }} UTC">{{ photo.created_at|naturaltime }}</time>{% if perms.photos.change_photo and photo.uploaded_by %} by {{ photo.uploaded_by }}{% endif %}</p>
+      {% if not photo.deleted_at and can_manage %}
       <div><a class="button button-small" href="{% url 'photos:edit' photo.id %}">{% include "core/_icon.html" with name="edit" size=16 %}Edit details or photo</a></div>
       {% endif %}
-    </div>
+    </header>
 
     <section class="panel" aria-labelledby="details-heading">
       <div class="panel-head"><h2 id="details-heading">Delivery details</h2></div>
       <div class="panel-body">
-        <dl class="facts">
-          <dt>Merchant</dt><dd>{% if photo.merchant_name %}{{ photo.merchant_name }}{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
-          <dt>Rider</dt><dd>{% if photo.rider_name %}{{ photo.rider_name }}{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
-          <dt>City</dt><dd>{% if photo.delivery_city %}{{ photo.delivery_city }}{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
-          <dt>Taken</dt><dd>{% if photo.captured_at %}{{ photo.captured_at|date:"d M Y H:i" }} UTC{% else %}<span class="not-given">Not given</span>{% endif %}</dd>
-          <dt>Uploaded</dt><dd>{{ photo.created_at|date:"d M Y H:i" }} UTC{% if perms.photos.change_photo and photo.uploaded_by %} · by {{ photo.uploaded_by }}{% endif %}</dd>
-          {% if photo.updated_at %}<dt>Last edited</dt><dd>{{ photo.updated_at|date:"d M Y H:i" }} UTC · {% if changes %}<a href="#history-heading">revision {{ photo.revision }}</a>{% else %}revision {{ photo.revision }}{% endif %}</dd>{% endif %}
+        <dl class="facts facts-icons">
+          <dt>{% include "core/_icon.html" with name="store" size=16 %}Merchant</dt><dd>{{ photo.merchant_name|default:"—" }}</dd>
+          <dt>{% include "core/_icon.html" with name="user" size=16 %}Rider</dt><dd>{{ photo.rider_name|default:"—" }}</dd>
+          <dt>{% include "core/_icon.html" with name="pin" size=16 %}City</dt><dd>{{ photo.delivery_city|default:"—" }}</dd>
+          <dt>{% include "core/_icon.html" with name="clock" size=16 %}Taken</dt><dd>{% if photo.captured_at %}{{ photo.captured_at|date:"d M Y, H:i" }} UTC{% else %}—{% endif %}</dd>
+          <dt>{% include "core/_icon.html" with name="upload" size=16 %}Uploaded</dt><dd>{{ photo.created_at|date:"d M Y, H:i" }} UTC</dd>
+          {% if photo.updated_at %}<dt>{% include "core/_icon.html" with name="edit" size=16 %}Last edited</dt><dd>{{ photo.updated_at|date:"d M Y, H:i" }} UTC · {% if changes %}<a href="#history-heading">revision {{ photo.revision }}</a>{% else %}revision {{ photo.revision }}{% endif %}</dd>{% endif %}
         </dl>
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="evidence-heading">
-      <div class="panel-head">
-        <h2 id="evidence-heading">Evidence record</h2>
-        {% include "core/_icon.html" with name="shield" %}
-      </div>
+    <details class="panel disclosure" aria-labelledby="evidence-heading">
+      <summary class="panel-head">
+        <span class="disclosure-title">{% include "core/_icon.html" with name="shield" %}<span><span id="evidence-heading" class="h2">Verify this photo</span><span class="muted small">Storage key, version and checksum</span></span></span>
+        <span class="disclosure-chevron" aria-hidden="true">{% include "core/_icon.html" with name="chevron-down" size=18 %}</span>
+      </summary>
       <div class="panel-body">
+        <p class="muted small evidence-intro">This photo is stored exactly as it was uploaded. Its SHA-256 checksum identifies the file: anyone with a copy can compute the checksum and compare it with the one below.</p>
         <dl class="facts">
           <dt>Object key</dt>
           <dd class="copy-row"><code>{{ photo.s3_key }}</code><button class="copy-button" type="button" data-copy="{{ photo.s3_key }}" aria-label="Copy object key" hidden>{% include "core/_icon.html" with name="copy" size=14 %}</button></dd>
@@ -66,7 +84,7 @@
           <dt>Format</dt><dd>{{ photo.content_type }}</dd>
         </dl>
       </div>
-    </section>
+    </details>
 
     {% if changes %}
     <section class="panel" aria-labelledby="history-heading">

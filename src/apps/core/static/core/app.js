@@ -255,7 +255,9 @@
     const what = button.getAttribute("aria-label").replace(/^Copy\s+/, "");  // "object key"
     const copied = what.charAt(0).toUpperCase() + what.slice(1) + " copied to the clipboard.";
     button.addEventListener("click", function () {
-      navigator.clipboard.writeText(button.dataset.copy).then(function () {
+      // data-copy="@url" copies this page's address (the host the visitor sees, e.g. CloudFront).
+      const value = button.dataset.copy === "@url" ? window.location.origin + window.location.pathname : button.dataset.copy;
+      navigator.clipboard.writeText(value).then(function () {
         button.classList.add("copied");
         setTimeout(function () { button.classList.remove("copied"); }, 1500);
         showToast(copied);

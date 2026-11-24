@@ -4,12 +4,12 @@
 {% include "photos/_dashboard_head.html" %}
 
 <div class="toolbar toolbar-split">
-  <span>{{ total }} live photo{{ total|pluralize }}{% if query %} matching “{{ query }}”{% endif %}</span>
+  <span>{% if perms.photos.manage_any_photo %}{{ total }} live photo{{ total|pluralize }}{% else %}You have {{ total }} live photo{{ total|pluralize }}{% endif %}{% if query %} matching “{{ query }}”{% endif %}</span>
   <form class="search" method="get" action="{% url 'photos:dashboard' %}" role="search">
     <div class="search-field">
       {% include "core/_icon.html" with name="search" %}
-      <label for="q" class="visually-hidden">Search by reference, title, city or merchant</label>
-      <input id="q" name="q" type="search" value="{{ query }}" placeholder="Reference, title, city or merchant">
+      <label for="q" class="visually-hidden">Search by title, description, reference, city, merchant or rider</label>
+      <input id="q" name="q" type="search" value="{{ query }}" placeholder="Search title, reference, city…">
     </div>
     <button class="button" type="submit">Search</button>
   </form>

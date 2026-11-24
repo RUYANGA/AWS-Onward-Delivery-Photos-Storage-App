@@ -5,12 +5,14 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from apps.accounts.activity import Action, photo_subject, record
@@ -34,6 +36,23 @@ NOTICES = {
 }
 ADD, CHANGE, DELETE = "photos.add_photo", "photos.change_photo", "photos.delete_photo"
 PURGE = "photos.purge_photo"  # delete permanently: administrators only
+MANAGE_ANY = "photos.manage_any_photo"  # administrators; editors manage only the photos they uploaded
+
+
+def _manageable(user):
+    """The photos this user may edit, delete and restore."""
+    return Photo.objects.all() if user.has_perm(MANAGE_ANY) else Photo.objects.filter(uploader=user)
+
+
+def can_manage(user, photo) -> bool:
+    return user.has_perm(MANAGE_ANY) or (photo.uploader_id is not None and photo.uploader_id == user.pk)
+
+
+def _manageable_or_403(request, photo_id, **lookup):
+    photo = get_object_or_404(Photo, pk=photo_id, **lookup)
+    if not can_manage(request.user, photo):
+        raise PermissionDenied  # someone else's photo
+    return photo
 CONFLICT_MESSAGE = ("Someone else changed this photo while you were editing. The latest details are shown below; "
                     "make your change again.")
 def delivery_reference_for(photo_id: uuid.UUID, when) -> str:
@@ -54,15 +73,18 @@ def _gallery_with_notice(notice: str) -> HttpResponse:
     return _see_other(f"{reverse('photos:gallery')}?notice={notice}")
 
 
+SEARCH_FIELDS = ("title", "description", "delivery_reference", "delivery_city", "merchant_name", "rider_name")
+
+
 def _search(photos, query: str):
-    if not query:
-        return photos
-    return photos.filter(
-        Q(delivery_reference__icontains=query)
-        | Q(title__icontains=query)
-        | Q(delivery_city__icontains=query)
-        | Q(merchant_name__icontains=query)
-    )
+    """Every word must appear somewhere (any field, any order, ignoring case): "parcel reception" finds
+    "Parcel left with reception"."""
+    for word in query.split()[:8]:
+        match = Q()
+        for field in SEARCH_FIELDS:
+            match |= Q(**{f"{field}__icontains": word})
+        photos = photos.filter(match)
+    return photos
 
 
 def _dashboard_stats(user) -> dict:
@@ -75,7 +97,7 @@ def _dashboard_stats(user) -> dict:
         "my_edits": PhotoChange.objects.filter(changed_by_user=user).count(),
     }
     if user.has_perm(DELETE):
-        stats["deleted"] = Photo.objects.filter(deleted_at__isnull=False).count()
+        stats["deleted"] = _manageable(user).filter(deleted_at__isnull=False).count()
     if user.has_perm("auth.view_user"):
         stats.update({
             "edited": live.filter(revision__gt=1).count(),
@@ -93,16 +115,50 @@ def _write_sidecar(photo: Photo) -> None:
         log.exception("sidecar write failed", extra={"photo_id": str(photo.id)})
 
 
+SORTS = {"newest": "-created_at", "oldest": "created_at"}
+
+
+def _page_numbers(page, around=1):
+    """1 … 4 5 6 … 12: the first, last and nearby pages, with None for a gap."""
+    last, current = page.paginator.num_pages, page.number
+    wanted = sorted({1, last, *range(max(1, current - around), min(last, current + around) + 1)})
+    numbers, previous = [], 0
+    for number in wanted:
+        if number - previous > 1:
+            numbers.append(None)
+        numbers.append(number)
+        previous = number
+    return numbers
+
+
 @require_safe
 def gallery(request):
     query = (request.GET.get("q") or "").strip()[:64]
-    photos = _search(Photo.objects.filter(deleted_at__isnull=True), query)
-    page = Paginator(photos.order_by("-created_at"), settings.PAGE_SIZE).get_page(request.GET.get("page"))
+    city = (request.GET.get("city") or "").strip()[:80]
+    sort = request.GET.get("sort") if request.GET.get("sort") in SORTS else "newest"
+    live = Photo.objects.filter(deleted_at__isnull=True)
+    photos = _search(live, query)
+    if city:
+        photos = photos.filter(delivery_city__iexact=city)
+    page = Paginator(photos.order_by(SORTS[sort], "-id"), settings.PAGE_SIZE).get_page(request.GET.get("page"))
+    filters = {key: value for key, value in (("q", query), ("city", city), ("sort", sort if sort != "newest" else ""))
+               if value}
+    cities = (live.exclude(delivery_city__isnull=True).exclude(delivery_city="")
+              .values("delivery_city").annotate(count=Count("id")).order_by("-count", "delivery_city")[:8])
     return render(request, "photos/gallery.html", {
         "page_obj": page,
         "photos": page.object_list,
+        "page_numbers": _page_numbers(page),
         "total": page.paginator.count,
+        "all_total": live.count(),
         "query": query,
+        "city": city,
+        "sort": sort,
+        "cities": cities,
+        "filtered": bool(query or city),
+        "base_query": urlencode(filters),  # current filters, for page and sort links
+        "city_query": urlencode({k: v for k, v in filters.items() if k != "city"}),
+        "sort_query": urlencode({k: v for k, v in filters.items() if k != "sort"}),
         "notice": NOTICES.get(request.GET.get("notice", "")),
     })
 
@@ -156,14 +212,23 @@ def upload(request):
 
 @require_safe
 def detail(request, photo_id):
-    # Deleted photos stay viewable by administrators: they are still evidence. Viewers only see live
-    # photos, and the change history (reasons, earlier photos) is for administrators.
+    # Deleted photos stay viewable by whoever may restore them: they are still evidence. Viewers only
+    # see live photos; the change history and the Edit button are for whoever may manage the photo.
     photo = get_object_or_404(Photo, pk=photo_id)
-    if photo.deleted_at and not request.user.has_perm(DELETE):
+    manage = request.user.is_authenticated and can_manage(request.user, photo)
+    if photo.deleted_at and not (manage and request.user.has_perm(DELETE)):
         raise Http404
+    newer = older = None
+    if not photo.deleted_at:  # step through the gallery in its default order
+        live = Photo.objects.filter(deleted_at__isnull=True)
+        newer = live.filter(created_at__gt=photo.created_at).order_by("created_at").first()
+        older = live.filter(created_at__lt=photo.created_at).order_by("-created_at").first()
     return render(request, "photos/detail.html", {
         "photo": photo,
-        "changes": photo.changes.all() if request.user.has_perm(CHANGE) else [],
+        "newer": newer,
+        "older": older,
+        "can_manage": manage and request.user.has_perm(CHANGE),
+        "changes": photo.changes.all() if manage and request.user.has_perm(CHANGE) else [],
         "notice": NOTICES.get(request.GET.get("notice", "")),
     })
 
@@ -172,7 +237,7 @@ def detail(request, photo_id):
 @permission_required(CHANGE)
 def edit(request, photo_id):
     # Only live photos can be edited; a deleted photo has to be restored first.
-    photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=True)
+    photo = _manageable_or_403(request, photo_id, deleted_at__isnull=True)
     form = PhotoEditForm(request.POST or None, request.FILES or None, photo=photo)
     context = {"photo": photo, "form": form, "max_mb": settings.MAX_UPLOAD_MB}
     if request.method != "POST":
@@ -203,7 +268,7 @@ def edit(request, photo_id):
 @permission_required(DELETE)
 def delete(request, photo_id):
     # Soft delete: nothing is removed from S3.
-    photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=True)
+    photo = _manageable_or_403(request, photo_id, deleted_at__isnull=True)
     photo.deleted_at = timezone.now()
     photo.deleted_by = actor_name(request.user)
     photo.save(update_fields=["deleted_at", "deleted_by"])
@@ -215,7 +280,7 @@ def delete(request, photo_id):
 @require_POST
 @permission_required(DELETE)
 def restore(request, photo_id):
-    photo = get_object_or_404(Photo, pk=photo_id, deleted_at__isnull=False)
+    photo = _manageable_or_403(request, photo_id, deleted_at__isnull=False)
     photo.deleted_at = None
     photo.deleted_by = ""
     photo.save(update_fields=["deleted_at", "deleted_by"])
@@ -240,9 +305,9 @@ def purge(request, photo_id):
 @require_safe
 @permission_required(CHANGE)
 def dashboard(request):
-    """Administrators manage photos here; the gallery and photo pages only show them."""
+    """Photos are managed here; the gallery and photo pages only show them. Editors see their own."""
     query = (request.GET.get("q") or "").strip()[:64]
-    photos = _search(Photo.objects.filter(deleted_at__isnull=True), query)
+    photos = _search(_manageable(request.user).filter(deleted_at__isnull=True), query)
     page = Paginator(photos.order_by("-created_at"), 25).get_page(request.GET.get("page"))
     return render(request, "photos/dashboard.html", {
         "tab": "live",
@@ -258,7 +323,7 @@ def dashboard(request):
 @require_safe
 @permission_required(DELETE)
 def deleted(request):
-    photos = Photo.objects.filter(deleted_at__isnull=False).order_by("-deleted_at")[:200]
+    photos = _manageable(request.user).filter(deleted_at__isnull=False).order_by("-deleted_at")[:200]
     return render(request, "photos/deleted.html", {
         "tab": "deleted",
         "stats": _dashboard_stats(request.user),

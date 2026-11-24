@@ -2,7 +2,7 @@
   <div>
     <p class="eyebrow">{% if perms.auth.view_user %}Administration{% else %}Editor{% endif %}</p>
     <h1>Welcome back, {{ user.first_name|default:account_name }}</h1>
-    <p class="muted">{% if perms.auth.view_user %}Manage delivery photos and the people who upload them.{% else %}Upload delivery photos, correct their details, and delete or restore them. Deleting permanently is for administrators.{% endif %}</p>
+    <p class="muted">{% if perms.auth.view_user %}Manage delivery photos and the people who upload them.{% else %}Upload delivery photos, and correct, delete or restore the ones you uploaded. Other people's photos and deleting permanently are for administrators.{% endif %}</p>
   </div>
   {% if perms.photos.add_photo %}<a class="button button-primary" href="{% url 'photos:upload' %}">{% include "core/_icon.html" with name="upload" %}Upload photo</a>{% endif %}
 </div>

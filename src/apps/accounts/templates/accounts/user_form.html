@@ -9,7 +9,7 @@
   <div>
     <p class="eyebrow">Administration</p>
     <h1>{% if account %}Edit {{ account.get_full_name|default:account.email }}{% else %}Add a user{% endif %}</h1>
-    <p class="muted">{% if account %}Change the user's details. Leave the password empty to keep the current one.{% else %}The new user is an editor: they can upload, edit, delete and restore photos.{% endif %}</p>
+    <p class="muted">{% if account %}Change the user's details. Leave the password empty to keep the current one.{% else %}The new user is an editor: they upload photos and manage the ones they uploaded.{% endif %}</p>
   </div>
 </div>
 
@@ -62,9 +62,9 @@
     <ul class="role-list">
       <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Sign in on the same page as administrators</li>
       <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Upload photos</li>
-      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Edit photo details or replace a photo, with a reason</li>
-      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Delete photos and restore them from Deleted photos</li>
+      <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Edit, replace, delete and restore the photos they uploaded</li>
       <li class="can">{% include "core/_icon.html" with name="check" size=16 %}Change their own name and password</li>
+      <li class="cannot">{% include "core/_icon.html" with name="x" size=16 %}Change or delete photos uploaded by someone else</li>
       <li class="cannot">{% include "core/_icon.html" with name="x" size=16 %}Delete photos permanently</li>
       <li class="cannot">{% include "core/_icon.html" with name="x" size=16 %}Manage users or change their email</li>
     </ul>
